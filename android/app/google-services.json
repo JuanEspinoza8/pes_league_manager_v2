@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "501939973190",
+    "project_id": "pes-league-manager-juan-99414",
+    "storage_bucket": "pes-league-manager-juan-99414.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:501939973190:android:aee3db6a950ec902edae47",
+        "android_client_info": {
+          "package_name": "com.tuliga.pes_league_manager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1isLMnVy9c9fo-VcoezhS9BDnciJ-42I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
