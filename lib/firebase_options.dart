@@ -47,30 +47,29 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCaxk0MEuyog-l9tZWSceAdXKacxjPjdow',
-    appId: '1:501939973190:web:d5174f926c1f023eedae47',
-    messagingSenderId: '501939973190',
-    projectId: 'pes-league-manager-juan-99414',
-    authDomain: 'pes-league-manager-juan-99414.firebaseapp.com',
-    storageBucket: 'pes-league-manager-juan-99414.firebasestorage.app',
-    measurementId: 'G-ENSGQY8K4X',
+    apiKey: 'AIzaSyBxcsCvW6vSRSffRJ3iYNKIydsQW-XYjyE',
+    appId: '1:766699560434:web:7085461740eff753f99f6b',
+    messagingSenderId: '766699560434',
+    projectId: 'pes-league-manager-v2',
+    authDomain: 'pes-league-manager-v2.firebaseapp.com',
+    storageBucket: 'pes-league-manager-v2.firebasestorage.app',
+    measurementId: 'G-YB7E1H8TS7',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyC1isLMnVy9c9fo-VcoezhS9BDnciJ-42I',
-    appId: '1:501939973190:android:aee3db6a950ec902edae47',
-    messagingSenderId: '501939973190',
-    projectId: 'pes-league-manager-juan-99414',
-    storageBucket: 'pes-league-manager-juan-99414.firebasestorage.app',
+    apiKey: 'AIzaSyAvXUwSQWExaqJAeRZ3FQvT6QHA_qKu1Is',
+    appId: '1:766699560434:android:228da9d825c3781ff99f6b',
+    messagingSenderId: '766699560434',
+    projectId: 'pes-league-manager-v2',
+    storageBucket: 'pes-league-manager-v2.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAUBIeTveeaXeES6XbPG0XYDZtkgUNMKW0',
-    appId: '1:501939973190:ios:1a1fe169f6993dcbedae47',
-    messagingSenderId: '501939973190',
-    projectId: 'pes-league-manager-juan-99414',
-    storageBucket: 'pes-league-manager-juan-99414.firebasestorage.app',
+    apiKey: 'AIzaSyBy5Fv5-OcmDKjcsrdoDfk21Ol8sZ20CZY',
+    appId: '1:766699560434:ios:64a3d5c640f00301f99f6b',
+    messagingSenderId: '766699560434',
+    projectId: 'pes-league-manager-v2',
+    storageBucket: 'pes-league-manager-v2.firebasestorage.app',
     iosBundleId: 'com.tuliga.pesLeagueManager',
   );
-
 }

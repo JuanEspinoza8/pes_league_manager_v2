@@ -5,16 +5,19 @@ import 'tabs/matches_tab.dart';
 import 'tabs/standings_tab.dart';
 import 'tabs/stats_tab.dart';
 import 'tabs/market_tab.dart';
+import 'tabs/news_tab.dart'; // <--- IMPORT NUEVO: PESTAÑA NOTICIAS
 import 'squad_builder_screen.dart';
 import 'transfers_screen.dart';
 import 'notifications_screen.dart';
 import 'my_team_screen.dart';
 import 'available_players_screen.dart';
+import 'rivalry_manager_screen.dart'; // <--- IMPORT NUEVO: GESTOR CLÁSICOS
 import '../services/season_generator_service.dart';
 import '../services/champions_progression_service.dart';
 import '../services/standings_service.dart';
 import '../services/stats_service.dart';
 import '../utils/debug_tools.dart';
+import 'custom_news_screen.dart';
 
 class LeagueDashboardScreen extends StatefulWidget {
   final String seasonId;
@@ -78,7 +81,7 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
     showModalBottomSheet(context: context, backgroundColor: const Color(0xFF0D1B2A), builder: (c) {
       return Container(
           padding: const EdgeInsets.all(20),
-          child: SingleChildScrollView( // Scroll por si hay muchas opciones
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,6 +113,17 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verificando grupos...")));
                     await ChampionsProgressionService().checkGroupStageEnd(widget.seasonId);
                   }),
+
+                  // --- BOTÓN NUEVO: GESTIONAR RIVALIDADES ---
+                  _adminTile(Icons.flash_on, "GESTIONAR CLÁSICOS", Colors.redAccent, () {
+                    Navigator.pop(c);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => RivalryManagerScreen(seasonId: widget.seasonId)));
+                  }),
+                  _adminTile(Icons.newspaper, "REDACTAR NOTICIA OFICIAL", Colors.blueAccent, () {
+                    Navigator.pop(c);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => CustomNewsScreen(seasonId: widget.seasonId)));
+                  }),
+                  // ------------------------------------------
 
                   // 2. Mantenimiento
                   _adminTile(Icons.refresh, "Recalcular Tablas y Stats", Colors.cyanAccent, () async {
@@ -150,7 +164,7 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
     );
   }
 
-  // --- NUEVO: DIÁLOGO CAMBIO DE CONTRASEÑA ---
+  // --- DIÁLOGO CAMBIO DE CONTRASEÑA ---
   void _showChangePasswordDialog() {
     final TextEditingController passCtrl = TextEditingController();
 
@@ -396,7 +410,7 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
     String budgetStr = "\$${(myBudget / 1000000).toStringAsFixed(1)}M";
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           toolbarHeight: 70,
@@ -412,15 +426,10 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
           foregroundColor: Colors.white,
 
           actions: [
-            // BOTÓN MERCADO (Solo Admin)
             if (isAdmin) IconButton(icon: Icon(isMarketOpen ? Icons.lock_open : Icons.lock, color: isMarketOpen ? Colors.greenAccent : Colors.redAccent), onPressed: _toggleMarket, tooltip: "Abrir/Cerrar Mercado"),
-
-            // BOTÓN HERRAMIENTAS (Visible para TODOS ahora, dentro filtra qué mostrar)
             IconButton(icon: const Icon(Icons.settings, color: Colors.white54), onPressed: _showDebugMenu, tooltip: "Ajustes y Admin"),
-
             IconButton(icon: const Icon(Icons.notifications_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsScreen(seasonId: widget.seasonId)))),
             IconButton(icon: const Icon(Icons.compare_arrows), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TransfersScreen(seasonId: widget.seasonId)))),
-
             Padding(
               padding: const EdgeInsets.only(right: 10, left: 5),
               child: GestureDetector(
@@ -431,12 +440,14 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
           ],
 
           bottom: const TabBar(
+              isScrollable: true,
               labelColor: Colors.amber,
               unselectedLabelColor: Colors.white54,
               indicatorColor: Colors.amber,
               indicatorWeight: 3,
               labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               tabs: [
+                Tab(icon: Icon(Icons.newspaper), text: "NOTICIAS"),
                 Tab(icon: Icon(Icons.calendar_month), text: "FIXTURE"),
                 Tab(icon: Icon(Icons.format_list_numbered), text: "TABLA"),
                 Tab(icon: Icon(Icons.bar_chart), text: "STATS"),
@@ -449,6 +460,7 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
           color: const Color(0xFFF0F2F5),
           child: TabBarView(
             children: [
+              NewsTab(seasonId: widget.seasonId),
               MatchesTab(seasonId: widget.seasonId, isAdmin: isAdmin),
               StandingsTab(seasonId: widget.seasonId),
               StatsTab(seasonId: widget.seasonId),
@@ -464,9 +476,7 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
 // --- WIDGET DE BÚSQUEDA DE JUGADORES ---
 class _PlayerSearchWidget extends StatefulWidget {
   const _PlayerSearchWidget();
-
-  @override
-  State<_PlayerSearchWidget> createState() => _PlayerSearchWidgetState();
+  @override State<_PlayerSearchWidget> createState() => _PlayerSearchWidgetState();
 }
 
 class _PlayerSearchWidgetState extends State<_PlayerSearchWidget> {
@@ -475,83 +485,24 @@ class _PlayerSearchWidgetState extends State<_PlayerSearchWidget> {
   bool loading = true;
   final TextEditingController _ctrl = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  @override void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
-    // Carga ligera: solo los primeros 500 para no saturar si hay muchos
     var q = await FirebaseFirestore.instance.collection('players').orderBy('rating', descending: true).limit(500).get();
-    if(mounted) {
-      setState(() {
-        allPlayers = q.docs;
-        filtered = q.docs;
-        loading = false;
-      });
-    }
+    if(mounted) { setState(() { allPlayers = q.docs; filtered = q.docs; loading = false; }); }
   }
 
   void _filter(String text) {
     setState(() {
-      if (text.isEmpty) {
-        filtered = allPlayers;
-      } else {
-        filtered = allPlayers.where((d) => d['name'].toString().toLowerCase().contains(text.toLowerCase())).toList();
-      }
+      if (text.isEmpty) { filtered = allPlayers; }
+      else { filtered = allPlayers.where((d) => d['name'].toString().toLowerCase().contains(text.toLowerCase())).toList(); }
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            controller: _ctrl,
-            autofocus: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "Escribe nombre (ej: Messi)...",
-              hintStyle: const TextStyle(color: Colors.white38),
-              prefixIcon: const Icon(Icons.search, color: Colors.amber),
-              filled: true,
-              fillColor: Colors.white10,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            ),
-            onChanged: _filter,
-          ),
-        ),
-        SizedBox(
-          height: 400,
-          child: loading
-              ? const Center(child: CircularProgressIndicator(color: Colors.amber))
-              : ListView.builder(
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              var data = filtered[index].data() as Map<String, dynamic>;
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.grey[800],
-                  child: Text("${data['rating']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-                title: Text(data['name'], style: const TextStyle(color: Colors.white)),
-                subtitle: Text("${data['position']} • ${data['team']}", style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                onTap: () {
-                  Navigator.pop(context, {
-                    'id': filtered[index].id,
-                    'name': data['name'],
-                    'rating': data['rating']
-                  });
-                },
-              );
-            },
-          ),
-        )
-      ],
-    );
+  @override Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Padding(padding: const EdgeInsets.all(16.0), child: TextField(controller: _ctrl, autofocus: true, style: const TextStyle(color: Colors.white), decoration: InputDecoration(hintText: "Escribe nombre (ej: Messi)...", hintStyle: const TextStyle(color: Colors.white38), prefixIcon: const Icon(Icons.search, color: Colors.amber), filled: true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),), onChanged: _filter)),
+      SizedBox(height: 400, child: loading ? const Center(child: CircularProgressIndicator(color: Colors.amber)) : ListView.builder(itemCount: filtered.length, itemBuilder: (context, index) { var data = filtered[index].data() as Map<String, dynamic>; return ListTile(leading: CircleAvatar(backgroundColor: Colors.grey[800], child: Text("${data['rating']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))), title: Text(data['name'], style: const TextStyle(color: Colors.white)), subtitle: Text("${data['position']} • ${data['team']}", style: const TextStyle(color: Colors.white54, fontSize: 11)), onTap: () { Navigator.pop(context, {'id': filtered[index].id, 'name': data['name'], 'rating': data['rating']}); }); }))
+    ]);
   }
 }

@@ -20,10 +20,87 @@ class LobbyWaitingRoom extends StatefulWidget {
 class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
   bool isGenerating = false;
 
-  Future<void> _handleStartSeason() async {
+  // --- NUEVA LÓGICA DE INICIO: SELECCIÓN DE SUPERCOPA ---
+  void _showSupercopaSelectionAndStart(BuildContext context) {
+    List<String> selectedIds = [];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("🏆 Supercopa: Elige 4"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 300,
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('seasons')
+                      .doc(widget.seasonId)
+                      .collection('participants')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                    var docs = snapshot.data!.docs;
+
+                    return ListView.builder(
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        var data = docs[index].data() as Map<String, dynamic>;
+                        String id = docs[index].id;
+                        String name = data['teamName'] ?? 'Sin Nombre';
+                        bool isSelected = selectedIds.contains(id);
+
+                        return CheckboxListTile(
+                          title: Text(name),
+                          value: isSelected,
+                          activeColor: Colors.amber,
+                          onChanged: (bool? val) {
+                            setStateDialog(() {
+                              if (val == true) {
+                                if (selectedIds.length < 4) selectedIds.add(id);
+                              } else {
+                                selectedIds.remove(id);
+                              }
+                            });
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                Text("Seleccionados: ${selectedIds.length}/4", style: TextStyle(color: selectedIds.length == 4 ? Colors.green : Colors.red)),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("CANCELAR"),
+                ),
+                ElevatedButton(
+                  onPressed: selectedIds.length == 4
+                      ? () {
+                    Navigator.pop(context); // Cerrar diálogo
+                    _handleStartSeason(selectedIds); // Iniciar con los seleccionados
+                  }
+                      : null, // Deshabilitado si no son 4
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D1B2A), foregroundColor: Colors.white),
+                  child: const Text("CONFIRMAR E INICIAR"),
+                )
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _handleStartSeason(List<String> supercopaIds) async {
     setState(() => isGenerating = true);
     try {
-      await SeasonGeneratorService().startSeason(widget.seasonId);
+      // Pasamos los IDs seleccionados al generador
+      await SeasonGeneratorService().startSeason(widget.seasonId, supercopaIds);
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
@@ -179,13 +256,12 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
 
                     var docs = participantsSnap.data!.docs;
 
-                    // BUSCAR MI USUARIO PARA VERIFICAR SI YA TENGO EQUIPO (Corrección de lógica)
+                    // BUSCAR MI USUARIO PARA VERIFICAR SI YA TENGO EQUIPO
                     bool iHaveTeam = false;
                     try {
-                      // Buscamos el documento cuyo ID sea mi currentUserId
                       var myDoc = docs.firstWhere((d) => d.id == currentUserId);
                       List roster = myDoc['roster'] ?? [];
-                      iHaveTeam = roster.isNotEmpty; // Si no está vacío, ya abrí el sobre
+                      iHaveTeam = roster.isNotEmpty;
                     } catch (_) {}
 
                     return Column(
@@ -196,7 +272,7 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                             itemCount: docs.length,
                             itemBuilder: (context, index) {
                               var data = docs[index].data() as Map<String, dynamic>;
-                              bool isFull = (data['roster'] ?? []).length >= 22; // O la cantidad que definas
+                              bool isFull = (data['roster'] ?? []).length >= 22;
                               bool isMe = data['uid'] == currentUserId;
                               bool isBot = data['role'] == 'BOT';
                               bool isAdminUser = data['uid'] == adminId;
@@ -265,14 +341,12 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                                     ],
                                   )
                                 else
-                                // MODO SOBRES: VALIDACIÓN DE "YA ABIERTO"
                                   SizedBox(
                                     width: double.infinity,
                                     child: _ActionButton(
                                         text: iHaveTeam ? "SOBRE YA ABIERTO" : "ABRIR SOBRE INICIAL",
                                         icon: iHaveTeam ? Icons.check : Icons.flash_on,
                                         color: iHaveTeam ? Colors.grey : Colors.blue[800]!,
-                                        // SI YA TIENE EQUIPO, DESHABILITAMOS LA ACCIÓN (null)
                                         onTap: iHaveTeam ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PackOpener(seasonId: widget.seasonId)))
                                     ),
                                   ),
@@ -298,19 +372,7 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                                     child: TextButton.icon(
                                       icon: const Icon(Icons.play_circle_fill, color: Colors.green),
                                       label: const Text("FINALIZAR DRAFT E INICIAR LIGA", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                      onPressed: () {
-                                        showDialog(
-                                            context: context,
-                                            builder: (c) => AlertDialog(
-                                              title: const Text("¿Iniciar Temporada?"),
-                                              content: const Text("Asegúrate de que todos tengan sus equipos listos. Se generará el calendario."),
-                                              actions: [
-                                                TextButton(onPressed: ()=>Navigator.pop(c), child: const Text("Cancelar")),
-                                                ElevatedButton(onPressed: (){ Navigator.pop(c); _handleStartSeason(); }, child: const Text("INICIAR"))
-                                              ],
-                                            )
-                                        );
-                                      },
+                                      onPressed: () => _showSupercopaSelectionAndStart(context), // CAMBIO AQUÍ
                                     ),
                                   )
                                 ]
@@ -349,7 +411,7 @@ class _ActionButton extends StatelessWidget {
   final String text;
   final IconData icon;
   final Color color;
-  final VoidCallback? onTap; // Nullable para deshabilitar
+  final VoidCallback? onTap;
   const _ActionButton({required this.text, required this.icon, required this.color, this.onTap});
 
   @override
@@ -358,7 +420,7 @@ class _ActionButton extends StatelessWidget {
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        disabledBackgroundColor: Colors.grey[300], // Color cuando está deshabilitado
+        disabledBackgroundColor: Colors.grey[300],
         disabledForegroundColor: Colors.grey[600],
         padding: const EdgeInsets.symmetric(vertical: 15),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

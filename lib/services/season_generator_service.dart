@@ -3,8 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class SeasonGeneratorService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // --- 1. INICIAR TEMPORADA ---
-  Future<void> startSeason(String seasonId) async {
+  Future<void> startSeason(String seasonId, List<String> supercopaIds) async {
     try {
       var pSnap = await _db.collection('seasons').doc(seasonId).collection('participants').get();
       if (pSnap.docs.length < 2) throw "Mínimo 2 jugadores.";
@@ -15,11 +14,18 @@ class SeasonGeneratorService {
       if (numTeams % 2 != 0) numTeams++;
       int totalLeagueRounds = (numTeams - 1) * 2;
 
+      // 1. Supercopa
+      await _generateSupercopa(seasonId, supercopaIds);
+
+      // 2. Liga
       await _generateLeagueFixture(seasonId, pSnap.docs, totalLeagueRounds);
+
+      // 3. Copa
       await _generateCupStructure(seasonId, pSnap.docs, totalLeagueRounds);
 
+      // 4. Europa (Champions, Europa, Conference)
       if (pSnap.docs.length >= 4) {
-        await _generateChampionsStructure(seasonId, pSnap.docs, totalLeagueRounds);
+        await _generateEuropeanStructure(seasonId, pSnap.docs, totalLeagueRounds);
       }
 
       await _db.collection('seasons').doc(seasonId).update({
@@ -34,9 +40,124 @@ class SeasonGeneratorService {
     }
   }
 
-  // --- 2. RELLENAR COPA (Trigger Fecha 4) ---
+  Future<void> _generateSupercopa(String seasonId, List<String> teams) async {
+    if (teams.length != 4) return;
+    WriteBatch batch = _db.batch();
+    var ref = _db.collection('seasons').doc(seasonId).collection('matches');
+    teams.shuffle();
+    // Semis
+    _createMatch(batch, ref, 'SUPERCOPA_SEMI', 'Supercopa Semi 1', -2, teams[0], teams[1]);
+    _createMatch(batch, ref, 'SUPERCOPA_SEMI', 'Supercopa Semi 2', -2, teams[2], teams[3]);
+    // Final
+    _createPlaceholder(batch, ref, 'SUPERCOPA_FINAL', 'Supercopa Final', -1, 'GANADOR Supercopa Semi 1', 'GANADOR Supercopa Semi 2');
+    await batch.commit();
+  }
+
+  // --- ESTRUCTURA EUROPEA ---
+  Future<void> _generateEuropeanStructure(String seasonId, List participants, int totalLeagueRounds) async {
+    // 1. Fase de Grupos (CORREGIDO: Solo Ida, 5 fechas)
+    await generateChampionsGroups(seasonId);
+
+    WriteBatch batch = _db.batch();
+    var ref = _db.collection('seasons').doc(seasonId).collection('matches');
+
+    // === REPECHAJES (IDA Y VUELTA) - Rondas 250 y 251 ===
+    // UCL: 2do vs 3ro
+    _createPlaceholder(batch, ref, 'UCL_PLAYOFF', 'Repechaje UCL 1 (Ida)', 250, '3ro Grupo B', '2do Grupo A');
+    _createPlaceholder(batch, ref, 'UCL_PLAYOFF', 'Repechaje UCL 2 (Ida)', 250, '3ro Grupo A', '2do Grupo B');
+
+    _createPlaceholder(batch, ref, 'UCL_PLAYOFF', 'Repechaje UCL 1 (Vuelta)', 251, '2do Grupo A', '3ro Grupo B');
+    _createPlaceholder(batch, ref, 'UCL_PLAYOFF', 'Repechaje UCL 2 (Vuelta)', 251, '2do Grupo B', '3ro Grupo A');
+
+    // UEL: 4to vs 5to
+    _createPlaceholder(batch, ref, 'UEL_PLAYOFF', 'Repechaje UEL 1 (Ida)', 250, '5to Grupo B', '4to Grupo A');
+    _createPlaceholder(batch, ref, 'UEL_PLAYOFF', 'Repechaje UEL 2 (Ida)', 250, '5to Grupo A', '4to Grupo B');
+
+    _createPlaceholder(batch, ref, 'UEL_PLAYOFF', 'Repechaje UEL 1 (Vuelta)', 251, '4to Grupo A', '5to Grupo B');
+    _createPlaceholder(batch, ref, 'UEL_PLAYOFF', 'Repechaje UEL 2 (Vuelta)', 251, '4to Grupo B', '5to Grupo A');
+
+    // === SEMIFINALES (IDA Y VUELTA) - Rondas 260 y 261 ===
+
+    // SEMIS CHAMPIONS (1ro Grupo vs Ganador Repechaje)
+    _createPlaceholder(batch, ref, 'CHAMPIONS_SEMI', 'Semi UCL 1 (Ida)', 260, 'GANADOR UCL_PO 1', '1ro Grupo A');
+    _createPlaceholder(batch, ref, 'CHAMPIONS_SEMI', 'Semi UCL 2 (Ida)', 260, 'GANADOR UCL_PO 2', '1ro Grupo B');
+
+    _createPlaceholder(batch, ref, 'CHAMPIONS_SEMI', 'Semi UCL 1 (Vuelta)', 261, '1ro Grupo A', 'GANADOR UCL_PO 1');
+    _createPlaceholder(batch, ref, 'CHAMPIONS_SEMI', 'Semi UCL 2 (Vuelta)', 261, '1ro Grupo B', 'GANADOR UCL_PO 2');
+
+    // SEMIS EUROPA LEAGUE (Ganador Repechaje UEL vs Perdedor Repechaje UCL)
+    _createPlaceholder(batch, ref, 'EUROPA_SEMI', 'Semi UEL 1 (Ida)', 260, 'GANADOR UEL_PO 1', 'PERDEDOR UCL_PO 1');
+    _createPlaceholder(batch, ref, 'EUROPA_SEMI', 'Semi UEL 2 (Ida)', 260, 'GANADOR UEL_PO 2', 'PERDEDOR UCL_PO 2');
+
+    _createPlaceholder(batch, ref, 'EUROPA_SEMI', 'Semi UEL 1 (Vuelta)', 261, 'PERDEDOR UCL_PO 1', 'GANADOR UEL_PO 1');
+    _createPlaceholder(batch, ref, 'EUROPA_SEMI', 'Semi UEL 2 (Vuelta)', 261, 'PERDEDOR UCL_PO 2', 'GANADOR UEL_PO 2');
+
+    // === FINALES (PARTIDO ÚNICO) - Ronda 270 ===
+
+    // CONFERENCE (Perdedores Repechaje UEL)
+    _createPlaceholder(batch, ref, 'CONFERENCE_FINAL', 'FINAL CONFERENCE', 270, 'PERDEDOR UEL_PO 1', 'PERDEDOR UEL_PO 2');
+
+    // EUROPA LEAGUE
+    _createPlaceholder(batch, ref, 'EUROPA_FINAL', 'FINAL EUROPA LEAGUE', 270, 'GANADOR Semi UEL 1', 'GANADOR Semi UEL 2');
+
+    // CHAMPIONS
+    _createPlaceholder(batch, ref, 'CHAMPIONS_FINAL', 'FINAL CHAMPIONS', 270, 'GANADOR Semi UCL 1', 'GANADOR Semi UCL 2');
+
+    await batch.commit();
+  }
+
+  // --- LÓGICA DE GRUPOS CORREGIDA (SOLO IDA = 5 Fechas) ---
+  Future<void> generateChampionsGroups(String seasonId) async {
+    var pSnap = await _db.collection('seasons').doc(seasonId).collection('participants').get();
+    var ids = pSnap.docs.map((d) => d.id).toList();
+    ids.shuffle();
+    int mid = (ids.length / 2).ceil();
+    var groupA = ids.sublist(0, mid);
+    var groupB = ids.sublist(mid);
+
+    WriteBatch batch = _db.batch();
+    for (var id in groupA) batch.update(_db.collection('seasons').doc(seasonId).collection('participants').doc(id), {'championsGroup': 'A'});
+    for (var id in groupB) batch.update(_db.collection('seasons').doc(seasonId).collection('participants').doc(id), {'championsGroup': 'B'});
+
+    // SOLO IDA (Rondas 201 a 205)
+    _generateGroupFixture(seasonId, groupA, 'A', 201, batch);
+    _generateGroupFixture(seasonId, groupB, 'B', 201, batch);
+
+    await batch.commit();
+  }
+
+  void _generateGroupFixture(String seasonId, List<String> teamIds, String groupName, int startRound, WriteBatch batch) {
+    List<String> rotation = List.from(teamIds);
+    // Si son impares (ej: 5), agregamos BYE
+    if (rotation.length % 2 != 0) rotation.add("BYE");
+    int rounds = rotation.length - 1; // Para 5 equipos (+BYE=6) -> 5 fechas
+    int half = rotation.length ~/ 2;
+    var ref = _db.collection('seasons').doc(seasonId).collection('matches');
+
+    for (int r = 0; r < rounds; r++) {
+      for (int i = 0; i < half; i++) {
+        String a = rotation[i]; String b = rotation[rotation.length - 1 - i];
+        if (a == "BYE" || b == "BYE") continue;
+
+        batch.set(ref.doc(), {
+          'type': 'CHAMPIONS_GROUP',
+          'group': groupName,
+          'roundName': 'Grupo $groupName F${r+1}',
+          'round': startRound + r,
+          'homeUser': (r%2==0)?a:b,
+          'awayUser': (r%2==0)?b:a,
+          'homeScore': null,
+          'awayScore': null,
+          'status': 'PENDING',
+          'playedAt': null
+        });
+      }
+      rotation.insert(1, rotation.removeLast());
+    }
+  }
+
+  // --- MÉTODOS EXISTENTES (Liga, Copa, Autofill) SIN CAMBIOS ---
   Future<void> fillCupBracketFromStandings(String seasonId) async {
-    // 1. Obtener seeds
     var pSnap = await _db.collection('seasons').doc(seasonId).collection('participants').get();
     var teams = pSnap.docs.toList();
     teams.sort((a,b) {
@@ -47,113 +168,53 @@ class SeasonGeneratorService {
       return (sB['dif']??0).compareTo(sA['dif']??0);
     });
     List<String> seeds = teams.map((d) => d.id).toList();
-
-    // 2. Buscar partidos NO iniciados
-    var matchesSnap = await _db.collection('seasons').doc(seasonId).collection('matches')
-        .where('type', isEqualTo: 'CUP')
-        .where('status', isEqualTo: 'SCHEDULED')
-        .get();
-
+    var matchesSnap = await _db.collection('seasons').doc(seasonId).collection('matches').where('type', isEqualTo: 'CUP').where('status', isEqualTo: 'SCHEDULED').get();
     WriteBatch batch = _db.batch();
     bool updatedSomething = false;
-
     for (var doc in matchesSnap.docs) {
       Map<String, dynamic> updateData = {};
       String hPlace = doc['homePlaceholder'] ?? '';
       String aPlace = doc['awayPlaceholder'] ?? '';
-
-      // Resolver LOCAL
       if (hPlace.startsWith('Seed')) {
-        try {
-          int seedIdx = int.parse(hPlace.split(' ')[1]) - 1;
-          if (seedIdx < seeds.length) updateData['homeUser'] = seeds[seedIdx];
-        } catch(e) {}
+        try { int seedIdx = int.parse(hPlace.split(' ')[1]) - 1; if (seedIdx < seeds.length) updateData['homeUser'] = seeds[seedIdx]; } catch(e) {}
       }
-
-      // Resolver VISITA
       if (aPlace.startsWith('Seed')) {
-        try {
-          int seedIdx = int.parse(aPlace.split(' ')[1]) - 1;
-          if (seedIdx < seeds.length) updateData['awayUser'] = seeds[seedIdx];
-        } catch(e) {}
+        try { int seedIdx = int.parse(aPlace.split(' ')[1]) - 1; if (seedIdx < seeds.length) updateData['awayUser'] = seeds[seedIdx]; } catch(e) {}
       }
-
-      // ACTIVAR PARTIDO SI AMBOS ESTÁN LISTOS
       String currentHome = updateData['homeUser'] ?? doc['homeUser'];
       String currentAway = updateData['awayUser'] ?? doc['awayUser'];
-
       bool homeReady = (currentHome != 'TBD' && !currentHome.startsWith('GANADOR'));
       bool awayReady = (currentAway != 'TBD' && !currentAway.startsWith('GANADOR'));
-
-      if (homeReady && awayReady) {
-        updateData['status'] = 'PENDING';
-        updatedSomething = true;
-      }
-
-      if (updateData.isNotEmpty) {
-        batch.update(doc.reference, updateData);
-      }
+      if (homeReady && awayReady) { updateData['status'] = 'PENDING'; updatedSomething = true; }
+      if (updateData.isNotEmpty) batch.update(doc.reference, updateData);
     }
-
-    if (updatedSomething) {
-      await batch.commit();
-      await _db.collection('seasons').doc(seasonId).update({'cupGenerated': true});
-    }
+    if (updatedSomething) { await batch.commit(); await _db.collection('seasons').doc(seasonId).update({'cupGenerated': true}); }
   }
 
-  // --- 3. GENERAR ESTRUCTURA COPA ---
   Future<void> _generateCupStructure(String seasonId, List participants, int totalLeagueRounds) async {
     WriteBatch batch = _db.batch();
     var ref = _db.collection('seasons').doc(seasonId).collection('matches');
     int n = participants.length;
-
     int mainDrawSize = _getNearestPowerOfTwo(n);
     int numPreliminaries = n - mainDrawSize;
-
-    int roundPrelim = 149;
-    int roundMain = 150;
-    int roundSemis = 151;
-    int roundFinal = 152;
-
-    // --- CORRECCIÓN AQUÍ --- FASE PRELIMINAR (REPECHAJE)
-    // Total de equipos involucrados en preliminares = numPreliminaries * 2
-    // Si n=10, numPrel=2. Total involucrados=4.
-    // Los seeds involucrados son los últimos 4: Seeds 7, 8, 9, 10.
-    // Índice de inicio (base 0) = n - (numPrel * 2) = 10 - 4 = 6.
+    int roundPrelim = 149; int roundMain = 150; int roundSemis = 151; int roundFinal = 152;
     int startSeedIndex = n - (numPreliminaries * 2);
-
     for (int i = 0; i < numPreliminaries; i++) {
-      // Emparejamos de afuera hacia adentro:
-      // i=0: El mejor de los peores (idx 6) vs El peor absoluto (idx 9)
-      // i=1: El segundo mejor (idx 7) vs El segundo peor (idx 8)
-
-      int seedHomeIdx = startSeedIndex + i;
-      int seedAwayIdx = (n - 1) - i;
-
-      _createPlaceholder(batch, ref, 'CUP', 'Preliminar ${i+1}', roundPrelim,
-          'Seed ${seedHomeIdx+1}', 'Seed ${seedAwayIdx+1}');
+      int seedHomeIdx = startSeedIndex + i; int seedAwayIdx = (n - 1) - i;
+      _createPlaceholder(batch, ref, 'CUP', 'Preliminar ${i+1}', roundPrelim, 'Seed ${seedHomeIdx+1}', 'Seed ${seedAwayIdx+1}');
     }
-    // --- FIN CORRECCIÓN ---
-
-    // CUADRO PRINCIPAL
     if (mainDrawSize == 8) {
       _createMatchOrWait(batch, ref, 'Cuartos A', roundMain, 1, 8, n, numPreliminaries, 1);
       _createMatchOrWait(batch, ref, 'Cuartos B', roundMain, 2, 7, n, numPreliminaries, 2);
       _createMatchOrWait(batch, ref, 'Cuartos C', roundMain, 3, 6, n, numPreliminaries, 3);
       _createMatchOrWait(batch, ref, 'Cuartos D', roundMain, 4, 5, n, numPreliminaries, 4);
-
-      // Semis
       _createPlaceholder(batch, ref, 'CUP', 'Semifinal A', roundSemis, 'GANADOR Cuartos A', 'GANADOR Cuartos D');
       _createPlaceholder(batch, ref, 'CUP', 'Semifinal B', roundSemis, 'GANADOR Cuartos B', 'GANADOR Cuartos C');
-    }
-    else if (mainDrawSize <= 4) {
+    } else if (mainDrawSize <= 4) {
       _createMatchOrWait(batch, ref, 'Semifinal A', roundMain, 1, 4, n, numPreliminaries, 1);
       _createMatchOrWait(batch, ref, 'Semifinal B', roundMain, 2, 3, n, numPreliminaries, 2);
     }
-
-    // FINAL
     _createPlaceholder(batch, ref, 'CUP', 'Gran Final', roundFinal, 'FINALISTA A', 'FINALISTA B');
-
     await batch.commit();
   }
 
@@ -162,74 +223,15 @@ class SeasonGeneratorService {
     String label2 = _getSeedLabel(seed2, totalTeams, numPrelims, prelimIndex);
     _createPlaceholder(batch, ref, 'CUP', name, round, label1, label2);
   }
-
   String _getSeedLabel(int seedNumber, int totalTeams, int numPrelims, int prelimIndex) {
-    int threshold = totalTeams - (numPrelims * 2);
-    if (seedNumber > threshold) {
-      return "GANADOR P$prelimIndex";
-    }
-    return "Seed $seedNumber";
+    int threshold = totalTeams - (numPrelims * 2); if (seedNumber > threshold) return "GANADOR P$prelimIndex"; return "Seed $seedNumber";
   }
-
-  int _getNearestPowerOfTwo(int n) {
-    int power = 1;
-    while (power * 2 <= n) power *= 2;
-    return power;
-  }
-
-  // --- CHAMPIONS & LIGA (Sin cambios) ---
-  Future<void> _generateChampionsStructure(String seasonId, List participants, int totalLeagueRounds) async {
-    await generateChampionsGroups(seasonId);
-    WriteBatch batch = _db.batch();
-    var ref = _db.collection('seasons').doc(seasonId).collection('matches');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Repechaje 1 Ida', 250, '2do A', '3ro B');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Repechaje 2 Ida', 250, '2do B', '3ro A');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Repechaje 1 Vuelta', 251, '3ro B', '2do A');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Repechaje 2 Vuelta', 251, '3ro A', '2do B');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Semifinal 1 Ida', 252, '1er A', 'GANADOR REP 2');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Semifinal 2 Ida', 252, '1er B', 'GANADOR REP 1');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Semifinal 1 Vuelta', 253, 'GANADOR REP 2', '1er A');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Semifinal 2 Vuelta', 253, 'GANADOR REP 1', '1er B');
-    _createPlaceholder(batch, ref, 'CHAMPIONS', 'Gran Final', 254, 'FINALISTA 1', 'FINALISTA 2');
-    await batch.commit();
-  }
-
-  Future<void> generateChampionsGroups(String seasonId) async {
-    var pSnap = await _db.collection('seasons').doc(seasonId).collection('participants').get();
-    var ids = pSnap.docs.map((d) => d.id).toList();
-    ids.shuffle();
-    int mid = (ids.length / 2).ceil();
-    var groupA = ids.sublist(0, mid);
-    var groupB = ids.sublist(mid);
-    WriteBatch batch = _db.batch();
-    for (var id in groupA) batch.update(_db.collection('seasons').doc(seasonId).collection('participants').doc(id), {'championsGroup': 'A'});
-    for (var id in groupB) batch.update(_db.collection('seasons').doc(seasonId).collection('participants').doc(id), {'championsGroup': 'B'});
-    _generateGroupFixture(seasonId, groupA, 'A', 201, batch);
-    _generateGroupFixture(seasonId, groupB, 'B', 201, batch);
-    await batch.commit();
-  }
-
-  void _generateGroupFixture(String seasonId, List<String> teamIds, String groupName, int startRound, WriteBatch batch) {
-    List<String> rotation = List.from(teamIds);
-    if (rotation.length % 2 != 0) rotation.add("BYE");
-    int rounds = rotation.length - 1;
-    int half = rotation.length ~/ 2;
-    var ref = _db.collection('seasons').doc(seasonId).collection('matches');
-    for (int r = 0; r < rounds; r++) {
-      for (int i = 0; i < half; i++) {
-        String a = rotation[i]; String b = rotation[rotation.length - 1 - i];
-        if (a == "BYE" || b == "BYE") continue;
-        batch.set(ref.doc(), {'type': 'CHAMPIONS', 'group': groupName, 'roundName': 'Grupo $groupName F${r+1}', 'round': startRound + r, 'homeUser': (r%2==0)?a:b, 'awayUser': (r%2==0)?b:a, 'homeScore': null, 'awayScore': null, 'status': 'PENDING', 'playedAt': null});
-      }
-      rotation.insert(1, rotation.removeLast());
-    }
-  }
+  int _getNearestPowerOfTwo(int n) { int power = 1; while (power * 2 <= n) power *= 2; return power; }
 
   Future<void> _generateLeagueFixture(String seasonId, List participants, int totalRounds) async {
     List<String> ids = participants.map((d) => d.id.toString()).toList();
     if (ids.length % 2 != 0) ids.add("BYE");
-    int nRounds = ids.length - 1;
-    int half = ids.length ~/ 2;
+    int nRounds = ids.length - 1; int half = ids.length ~/ 2;
     List<String> teams = List.from(ids);
     WriteBatch batch = _db.batch();
     var ref = _db.collection('seasons').doc(seasonId).collection('matches');
