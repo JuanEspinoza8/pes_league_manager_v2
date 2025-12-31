@@ -31,7 +31,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   final TextEditingController _homeScoreCtrl = TextEditingController();
   final TextEditingController _awayScoreCtrl = TextEditingController();
 
-  // Controladores Penales (NUEVO)
+  // Controladores Penales
   final TextEditingController _homePenaltiesCtrl = TextEditingController();
   final TextEditingController _awayPenaltiesCtrl = TextEditingController();
 
@@ -50,7 +50,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   bool _isLoadingSuspensions = true;
 
   // Estados de control
-  bool _showPenaltiesInput = false; // Se activa si hay empate
+  bool _showPenaltiesInput = false;
   bool isSaving = false;
   bool isScanning = false;
   bool showAdvanced = false;
@@ -73,18 +73,18 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       _awayScoreCtrl.text = widget.matchData['awayScore'].toString();
     }
 
-    // Cargar Penales si existen (Formato nuevo: Parsing del string "5-4")
+    // Cargar Penales si existen
     if (widget.matchData['definedByPenalties'] == true && widget.matchData['penaltyScore'] != null) {
       _showPenaltiesInput = true;
       try {
-        String scores = widget.matchData['penaltyScore']; // Ej: "5-4"
+        String scores = widget.matchData['penaltyScore'];
         List<String> parts = scores.split('-');
         if (parts.length == 2) {
           _homePenaltiesCtrl.text = parts[0].trim();
           _awayPenaltiesCtrl.text = parts[1].trim();
         }
       } catch (e) {
-        // Error parseando, dejar vacío
+        // Error parseando
       }
     }
 
@@ -96,19 +96,17 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     _loadRosters();
     _checkSuspensions();
 
-    // Listener para activar penales automáticamente si empatan
+    // Listener para activar penales automáticamente
     _homeScoreCtrl.addListener(_checkDrawCondition);
     _awayScoreCtrl.addListener(_checkDrawCondition);
   }
 
   void _checkDrawCondition() {
-    // Solo aplica para Copa y Champions (no Liga)
     if (widget.matchData['type'] == 'LEAGUE') return;
 
     int h = int.tryParse(_homeScoreCtrl.text) ?? -1;
     int a = int.tryParse(_awayScoreCtrl.text) ?? -1;
 
-    // Si los números son validos y son iguales
     if (h >= 0 && a >= 0 && h == a) {
       setState(() => _showPenaltiesInput = true);
     } else {
@@ -138,7 +136,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       return;
     }
 
-    // INTENTO 1: Leer la info pre-calculada (la que se mostrará en el calendario)
     if (widget.matchData['preMatchInfo'] != null) {
       Map info = widget.matchData['preMatchInfo'];
       List<String> hSusp = List<String>.from(info['homeSuspended'] ?? []);
@@ -155,7 +152,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       }
     }
 
-    // INTENTO 2 (Respaldo): Calcular al vuelo si no hay info pre-calculada
     final discipline = DisciplineService();
     var hSusp = await discipline.getSuspendedPlayers(seasonId: widget.seasonId, teamId: widget.matchData['homeUser'], competitionType: widget.matchData['type'], currentRound: widget.matchData['round']);
     var aSusp = await discipline.getSuspendedPlayers(seasonId: widget.seasonId, teamId: widget.matchData['awayUser'], competitionType: widget.matchData['type'], currentRound: widget.matchData['round']);
@@ -173,7 +169,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   }
 
   void _showSuspensionAlert() {
-    // Función auxiliar para obtener nombres
     String getNames(List<String> ids, List<DocumentSnapshot> roster) {
       if (roster.isEmpty) return ids.join(", ");
       List<String> names = [];
@@ -299,10 +294,9 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       await matchRef.update(updateData);
 
       if (widget.isAdmin) {
-        // 1. PROPAGAR SUSPENSIONES AL FUTURO (La clave para la advertencia en el calendario)
+        // 1. PROPAGAR SUSPENSIONES
         if (widget.matchData['type'] != 'LEAGUE') {
           var updatedSnapshot = await matchRef.get();
-          // Aquí llamamos al DisciplineService para que "pegue" la etiqueta en el siguiente partido
           await DisciplineService().propagateSuspensionsToNextMatch(widget.seasonId, updatedSnapshot.data()!);
         }
 
@@ -317,11 +311,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   }
 
   Future<void> _processAdminTasks(int hGoals, int aGoals, bool definedByPenalties, String? penaltyScoreStr) async {
-    // 1. PREMIOS, STATS Y TORNEOS (Igual que antes)
-    // ... [Aquí va tu código de premios y stats y progresión de torneos] ...
-    // (Por brevedad, asumo que dejas el código que ya funcionaba aquí)
-    // Si necesitas que te lo copie completo otra vez avísame, pero es lo mismo de antes.
-
+    // 1. PREMIOS
     int winReward = 15000000; int drawReward = 7500000;
     int homePrize = (hGoals > aGoals) ? winReward : (aGoals > hGoals ? 0 : drawReward);
     int awayPrize = (aGoals > hGoals) ? winReward : (hGoals > aGoals ? 0 : drawReward);
@@ -350,16 +340,14 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       }
     }
 
-    // --- NUEVA LÓGICA DE NOTICIAS ---
+    // --- LOGICA DE NOTICIAS ---
 
     String homeName = await _getTeamName(widget.matchData['homeUser']);
     String awayName = await _getTeamName(widget.matchData['awayUser']);
 
-    // 2. Obtener Historial (Forma)
     String homeForm = await _getTeamForm(widget.matchData['homeUser']);
     String awayForm = await _getTeamForm(widget.matchData['awayUser']);
 
-    // 3. Detalles del partido
     StringBuffer detailsBuffer = StringBuffer();
     void processActions(Map<String, Map<String, int>> actions, String teamName, List<DocumentSnapshot> roster) {
       actions.forEach((pid, stats) {
@@ -376,7 +364,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     processActions(_homeActions, homeName, _homeRoster);
     processActions(_awayActions, awayName, _awayRoster);
 
-    // 4. Clásico
     bool isDerby = false;
     try {
       var seasonDoc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).get();
@@ -386,7 +373,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       if (rivalries.contains(key1) || rivalries.contains(key2)) isDerby = true;
     } catch(e) {}
 
-    // 5. Ganador
     String? winnerName;
     if (hGoals > aGoals) winnerName = homeName;
     else if (aGoals > hGoals) winnerName = awayName;
@@ -398,11 +384,15 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       } catch (e) {}
     }
 
-    // 6. Generar Noticia
+    // 6. GENERAR NOTICIA (Aquí conectamos los IDs de los usuarios)
     NewsService().createMatchNews(
       seasonId: widget.seasonId,
       homeName: homeName,
       awayName: awayName,
+      // 👇 IDs necesarios para buscar la apariencia del DT 👇
+      homeId: widget.matchData['homeUser'],
+      awayId: widget.matchData['awayUser'],
+      // ----------------------------------------------------
       homeScore: hGoals,
       awayScore: aGoals,
       competition: type,
@@ -411,33 +401,25 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       winnerName: winnerName,
       matchDetails: detailsBuffer.toString(),
       isDerby: isDerby,
-      homeForm: homeForm, // <--- Pasamos el contexto histórico
+      homeForm: homeForm,
       awayForm: awayForm,
     );
 
-    // 7. Notificación
+    // 7. NOTIFICACIÓN PUSH
     String bodyText = "$homeName $hGoals - $aGoals $awayName";
     if (definedByPenalties) bodyText += " (Penales: $penaltyScoreStr)";
     await NotificationService.sendGlobalNotification(seasonId: widget.seasonId, title: "FINALIZADO", body: bodyText, type: "MATCH");
   }
 
-  // Helper para leer la forma (Historial)
   Future<String> _getTeamForm(String teamId) async {
     if (teamId == 'TBD' || teamId.startsWith('GANADOR')) return "";
     try {
       var doc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(teamId).get();
       var stats = doc.data()?['leagueStats'];
       if (stats == null) return "Sin datos previos";
-
-      int w = stats['w'] ?? 0;
-      int l = stats['l'] ?? 0;
-      int d = stats['d'] ?? 0;
-      int pts = stats['pts'] ?? 0;
-
+      int w = stats['w'] ?? 0; int l = stats['l'] ?? 0; int d = stats['d'] ?? 0; int pts = stats['pts'] ?? 0;
       return "En liga lleva $w ganados, $d empatados y $l perdidos ($pts puntos).";
-    } catch (e) {
-      return "";
-    }
+    } catch (e) { return ""; }
   }
 
   @override
@@ -521,7 +503,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     );
   }
 
-  // --- WIDGETS AUXILIARES (UI) ---
+  // --- WIDGETS AUXILIARES ---
   Widget _buildTeamRosterTile(String label, int totalGoals, int assignedGoals, int assignedAssists, List<DocumentSnapshot> roster, Map<String, Map<String, int>> actions, List<String> suspended) {
     bool complete = (totalGoals == assignedGoals);
     return Card(elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)), clipBehavior: Clip.antiAlias,

@@ -4,7 +4,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 
 class GeminiStatsService {
   // ¡RECUERDA PONER TU API KEY REAL AQUÍ!
-  static const String _apiKey = 'oculto';
+  static const String _apiKey = 'CLAVE';
 
   Future<Map<String, dynamic>?> extractStatsFromImage(Uint8List imageBytes) async {
     try {

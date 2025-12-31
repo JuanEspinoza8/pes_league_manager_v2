@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
+import '../services/news_service.dart'; // <--- IMPORTANTE: Import agregado
 
 class TransfersScreen extends StatefulWidget {
   final String seasonId;
@@ -26,11 +27,12 @@ class _TransfersScreenState extends State<TransfersScreen> {
     final seasonRef = db.collection('seasons').doc(widget.seasonId);
 
     try {
-      // Obtenemos nombres para la notificación antes de la transacción
+      // Obtenemos nombres antes de la transacción
       String buyerName = await _getTeamName(buyerId);
       String sellerName = await _getTeamName(sellerId);
       String playerName = data['targetPlayerName'];
 
+      // 1. TRANSACCIÓN (MOVIMIENTO DE DINERO Y JUGADORES)
       await db.runTransaction((transaction) async {
         DocumentReference buyerRef = seasonRef.collection('participants').doc(buyerId);
         DocumentReference sellerRef = seasonRef.collection('participants').doc(sellerId);
@@ -46,15 +48,15 @@ class _TransfersScreenState extends State<TransfersScreen> {
         if (buyerBudget < amount) throw "El comprador no tiene fondos suficientes";
         if (!sellerRoster.contains(targetPlayerId)) throw "Ya no tienes a este jugador";
 
-        // Intercambio de dinero
+        // Dinero
         transaction.update(buyerRef, {'budget': buyerBudget - amount});
         transaction.update(sellerRef, {'budget': sellerBudget + amount});
 
-        // Intercambio de jugadores (Principal)
+        // Jugador Principal
         sellerRoster.remove(targetPlayerId);
         buyerRoster.add(targetPlayerId);
 
-        // Intercambio de jugadores (Swap)
+        // Jugador de Cambio (Swap)
         if (swapPlayerId != null) {
           if (!buyerRoster.contains(swapPlayerId)) throw "El comprador ya no tiene al jugador de cambio";
           buyerRoster.remove(swapPlayerId);
@@ -66,7 +68,21 @@ class _TransfersScreenState extends State<TransfersScreen> {
         transaction.update(offerDoc.reference, {'status': 'ACCEPTED'});
       });
 
-      // --- NOTIFICACIÓN DETALLADA ---
+      // 2. GENERAR NOTICIA DE TRASPASO (NUEVO CÓDIGO)
+      // Lo hacemos "blindado" para que si falla la IA, no cancele el traspaso visualmente
+      try {
+        NewsService().createTransferNews(
+          seasonId: widget.seasonId,
+          playerName: playerName,
+          fromTeam: sellerName,
+          toTeam: buyerName,
+          price: amount,
+        );
+      } catch (newsError) {
+        print("⚠️ Error generando noticia de traspaso (no crítico): $newsError");
+      }
+
+      // 3. NOTIFICACIÓN PUSH
       String amountStr = amount > 0 ? "por \$${(amount/1000000).toStringAsFixed(1)}M" : "gratis";
       String swapStr = swapPlayerId != null ? " + ${data['swapPlayerName']}" : "";
 
@@ -77,9 +93,13 @@ class _TransfersScreenState extends State<TransfersScreen> {
           type: "TRANSFER"
       );
 
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Traspaso completado!"), backgroundColor: Colors.green));
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Traspaso completado!"), backgroundColor: Colors.green));
+      }
     } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -97,7 +117,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F5), // Fondo gris suave
+        backgroundColor: const Color(0xFFF0F2F5),
         appBar: AppBar(
           title: const Text("BUZÓN DE FICHAJES", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
           backgroundColor: const Color(0xFF0D1B2A),
@@ -184,20 +204,9 @@ class _TransferCard extends StatelessWidget {
     IconData statusIcon;
 
     switch (data['status']) {
-      case 'ACCEPTED':
-        statusColor = Colors.green;
-        statusText = "ACEPTADA";
-        statusIcon = Icons.check_circle;
-        break;
-      case 'REJECTED':
-        statusColor = Colors.red;
-        statusText = "RECHAZADA";
-        statusIcon = Icons.cancel;
-        break;
-      default:
-        statusColor = Colors.orange;
-        statusText = "PENDIENTE";
-        statusIcon = Icons.hourglass_top;
+      case 'ACCEPTED': statusColor = Colors.green; statusText = "ACEPTADA"; statusIcon = Icons.check_circle; break;
+      case 'REJECTED': statusColor = Colors.red; statusText = "RECHAZADA"; statusIcon = Icons.cancel; break;
+      default: statusColor = Colors.orange; statusText = "PENDIENTE"; statusIcon = Icons.hourglass_top;
     }
 
     String moneyText = data['offeredAmount'] > 0 ? "\$${(data['offeredAmount']/1000000).toStringAsFixed(1)}M" : "";
@@ -211,75 +220,36 @@ class _TransferCard extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // HEADER CON ESTADO
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Row(
-                    children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 5),
-                      Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                    ],
-                  ),
+                  child: Row(children: [Icon(statusIcon, size: 14, color: statusColor), const SizedBox(width: 5), Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))]),
                 ),
-                if (moneyText.isNotEmpty)
-                  Text(moneyText, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 16)),
+                if (moneyText.isNotEmpty) Text(moneyText, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 16)),
               ],
             ),
             const Divider(height: 20),
-
-            // CONTENIDO DE LA OFERTA
             Row(
               children: [
-                // JUGADOR OBJETIVO
                 Expanded(child: _PlayerColumn("SOLICITADO", data['targetPlayerName'], Icons.person)),
-
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(Icons.swap_horiz, color: Colors.grey),
-                ),
-
-                // A CAMBIO DE
+                const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Icon(Icons.swap_horiz, color: Colors.grey)),
                 Expanded(child: _PlayerColumn("A CAMBIO", hasSwap ? swapName : "Solo Dinero", hasSwap ? Icons.person_outline : Icons.monetization_on_outlined)),
               ],
             ),
-
-            // BOTONES (Solo si está pendiente y la recibí yo)
             if (isPending && isReceived) ...[
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onReject,
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
-                      child: const Text("RECHAZAR"),
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: onAccept,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                      child: const Text("ACEPTAR"),
-                    ),
-                  ),
-                ],
-              )
+              Row(children: [
+                Expanded(child: OutlinedButton(onPressed: onReject, style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)), child: const Text("RECHAZAR"))),
+                const SizedBox(width: 15),
+                Expanded(child: ElevatedButton(onPressed: onAccept, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("ACEPTAR"))),
+              ])
             ],
-
-            // INFORMACIÓN DE QUIÉN (Si la envié yo, dice a quién se la envié)
             if (!isReceived) ...[
-              const SizedBox(height: 10),
-              const Divider(height: 10),
-              FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('participants').doc(data['toUserId']).get(),
-                builder: (c, s) => Text("Enviada a: ${s.data?['teamName'] ?? '...'}", style: const TextStyle(color: Colors.grey, fontSize: 11)),
-              )
+              const SizedBox(height: 10), const Divider(height: 10),
+              FutureBuilder<DocumentSnapshot>(future: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('participants').doc(data['toUserId']).get(), builder: (c, s) => Text("Enviada a: ${s.data?['teamName'] ?? '...'}", style: const TextStyle(color: Colors.grey, fontSize: 11)))
             ]
           ],
         ),
@@ -289,21 +259,7 @@ class _TransferCard extends StatelessWidget {
 }
 
 class _PlayerColumn extends StatelessWidget {
-  final String label;
-  final String name;
-  final IconData icon;
+  final String label; final String name; final IconData icon;
   const _PlayerColumn(this.label, this.name, this.icon);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-        const SizedBox(height: 5),
-        Icon(icon, color: const Color(0xFF0D1B2A), size: 28),
-        const SizedBox(height: 5),
-        Text(name, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
-      ],
-    );
-  }
+  @override Widget build(BuildContext context) { return Column(children: [Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)), const SizedBox(height: 5), Icon(icon, color: const Color(0xFF0D1B2A), size: 28), const SizedBox(height: 5), Text(name, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis)]); }
 }

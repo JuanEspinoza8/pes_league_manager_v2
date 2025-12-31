@@ -5,19 +5,19 @@ import 'tabs/matches_tab.dart';
 import 'tabs/standings_tab.dart';
 import 'tabs/stats_tab.dart';
 import 'tabs/market_tab.dart';
-import 'tabs/news_tab.dart'; // <--- IMPORT NUEVO: PESTAÑA NOTICIAS
+import 'tabs/news_tab.dart';
 import 'squad_builder_screen.dart';
 import 'transfers_screen.dart';
 import 'notifications_screen.dart';
 import 'my_team_screen.dart';
 import 'available_players_screen.dart';
-import 'rivalry_manager_screen.dart'; // <--- IMPORT NUEVO: GESTOR CLÁSICOS
+import 'rivalry_manager_screen.dart';
+import 'custom_news_screen.dart';
 import '../services/season_generator_service.dart';
 import '../services/champions_progression_service.dart';
 import '../services/standings_service.dart';
 import '../services/stats_service.dart';
 import '../utils/debug_tools.dart';
-import 'custom_news_screen.dart';
 
 class LeagueDashboardScreen extends StatefulWidget {
   final String seasonId;
@@ -76,6 +76,91 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
     if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(!isMarketOpen ? "Mercado ABIERTO" : "Mercado CERRADO"), backgroundColor: !isMarketOpen ? Colors.green : Colors.red));
   }
 
+  // --- NUEVO: GESTOR DE APARIENCIAS (SOLO ADMIN) ---
+  void _showManagerAppearanceList() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Editar Apariencia de DTs"),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              var docs = snapshot.data!.docs;
+
+              return ListView.builder(
+                itemCount: docs.length,
+                itemBuilder: (ctx, i) {
+                  var data = docs[i].data() as Map<String, dynamic>;
+                  String teamName = data['teamName'];
+                  String desc = data['managerDescription'] ?? "No definida";
+
+                  return ListTile(
+                    title: Text(teamName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(desc, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    trailing: const Icon(Icons.edit, color: Colors.blue),
+                    onTap: () {
+                      Navigator.pop(context); // Cerrar lista
+                      _showEditManagerDescriptionDialog(docs[i].id, teamName, desc == "No definida" ? "" : desc);
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar"))],
+      ),
+    );
+  }
+
+  void _showEditManagerDescriptionDialog(String userId, String teamName, String currentDesc) {
+    TextEditingController _ctrl = TextEditingController(text: currentDesc);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("DT de $teamName"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Describe físicamente a tu amigo para que la IA lo dibuje en las noticias.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _ctrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: "Ej: Pelo rubio largo, barba candado, usa gafas de sol, gordo...",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('seasons').doc(widget.seasonId)
+                  .collection('participants').doc(userId)
+                  .update({'managerDescription': _ctrl.text.trim()});
+
+              if(mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Apariencia de $teamName guardada")));
+                _showManagerAppearanceList(); // Volver a abrir la lista
+              }
+            },
+            child: const Text("GUARDAR"),
+          )
+        ],
+      ),
+    );
+  }
+  // ------------------------------------------------
+
   // --- MENÚ DE HERRAMIENTAS (ADMIN Y CUENTA) ---
   void _showDebugMenu() {
     showModalBottomSheet(context: context, backgroundColor: const Color(0xFF0D1B2A), builder: (c) {
@@ -114,19 +199,26 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
                     await ChampionsProgressionService().checkGroupStageEnd(widget.seasonId);
                   }),
 
-                  // --- BOTÓN NUEVO: GESTIONAR RIVALIDADES ---
+                  // Gestión de Contenido
                   _adminTile(Icons.flash_on, "GESTIONAR CLÁSICOS", Colors.redAccent, () {
                     Navigator.pop(c);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => RivalryManagerScreen(seasonId: widget.seasonId)));
                   }),
+
+                  // --- BOTÓN NUEVO ---
+                  _adminTile(Icons.face, "EDITAR APARIENCIAS DT", Colors.cyanAccent, () {
+                    Navigator.pop(c);
+                    _showManagerAppearanceList();
+                  }),
+                  // -------------------
+
                   _adminTile(Icons.newspaper, "REDACTAR NOTICIA OFICIAL", Colors.blueAccent, () {
                     Navigator.pop(c);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => CustomNewsScreen(seasonId: widget.seasonId)));
                   }),
-                  // ------------------------------------------
 
                   // 2. Mantenimiento
-                  _adminTile(Icons.refresh, "Recalcular Tablas y Stats", Colors.cyanAccent, () async {
+                  _adminTile(Icons.refresh, "Recalcular Tablas y Stats", Colors.grey, () async {
                     Navigator.pop(c);
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sincronizando toda la liga...")));
                     await StandingsService().recalculateLeagueStandings(widget.seasonId);
