@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui'; // Necesario para el Blur
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ class CreateSeasonScreen extends StatefulWidget {
 }
 
 class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
+  // --- LÓGICA INTACTA ---
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
 
@@ -72,150 +74,177 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
       setState(() => _isLoading = false);
     }
   }
+  // --- FIN LÓGICA ---
 
   @override
   Widget build(BuildContext context) {
+    const goldColor = Color(0xFFD4AF37);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A), // Fondo Oscuro Premium
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text("CREAR TORNEO", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+        title: const Text("CREAR TORNEO", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 20)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(color: Colors.black.withOpacity(0.2)),
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // --- TARJETA NOMBRE ---
-              _buildSectionTitle("IDENTIDAD"),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: _cardDecoration(),
-                child: TextFormField(
-                  controller: _nameController,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  decoration: InputDecoration(
-                    labelText: "Nombre de la Temporada",
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.1),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                    prefixIcon: const Icon(Icons.emoji_events, color: Colors.amber),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0F172A), Color(0xFF020617)], // Slate 900 -> Black
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 100, 20, 40), // Top padding por AppBar
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- SECCIÓN IDENTIDAD ---
+                _buildSectionTitle("IDENTIDAD DE LA LIGA"),
+                _GlassCard(
+                  child: TextFormField(
+                    controller: _nameController,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                    decoration: InputDecoration(
+                      labelText: "NOMBRE DEL TORNEO",
+                      labelStyle: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12, letterSpacing: 1),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.05),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: goldColor, width: 1)),
+                      prefixIcon: const Icon(Icons.emoji_events_outlined, color: goldColor),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                    ),
+                    validator: (v) => v!.isEmpty ? "El nombre es obligatorio" : null,
                   ),
-                  validator: (v) => v!.isEmpty ? "Escribe un nombre" : null,
                 ),
-              ),
 
-              const SizedBox(height: 25),
+                const SizedBox(height: 30),
 
-              // --- TARJETA PARTICIPANTES ---
-              _buildSectionTitle("CAPACIDAD"),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: _cardDecoration(),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Participantes", style: TextStyle(color: Colors.white, fontSize: 16)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                          decoration: BoxDecoration(color: Colors.blueAccent, borderRadius: BorderRadius.circular(15)),
-                          child: Text("$_maxPlayers", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: Colors.blueAccent,
-                        thumbColor: Colors.white,
-                        overlayColor: Colors.blueAccent.withOpacity(0.2),
+                // --- SECCIÓN CAPACIDAD ---
+                _buildSectionTitle("PARTICIPANTES"),
+                _GlassCard(
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("DTs Humanos", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            decoration: BoxDecoration(
+                                color: goldColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: goldColor.withOpacity(0.5))
+                            ),
+                            child: Text("$_maxPlayers", style: const TextStyle(color: goldColor, fontWeight: FontWeight.w900, fontSize: 16)),
+                          )
+                        ],
                       ),
-                      child: Slider(
-                        value: _maxPlayers.toDouble(),
-                        min: 2,
-                        max: 20,
-                        divisions: 18,
-                        onChanged: (val) => setState(() => _maxPlayers = val.toInt()),
+                      const SizedBox(height: 20),
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: goldColor,
+                          inactiveTrackColor: Colors.white10,
+                          thumbColor: Colors.white,
+                          overlayColor: goldColor.withOpacity(0.2),
+                          trackHeight: 4,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                        ),
+                        child: Slider(
+                          value: _maxPlayers.toDouble(),
+                          min: 2,
+                          max: 20,
+                          divisions: 18,
+                          onChanged: (val) => setState(() => _maxPlayers = val.toInt()),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // --- TARJETA FORMATO (DRAFT) ---
-              _buildSectionTitle("FORMATO DE INICIO"),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: _cardDecoration(),
-                child: Column(
-                  children: [
-                    _buildRadioTile(
-                        title: "Modo Subasta",
-                        subtitle: "Presupuesto de 100M. Puja en vivo.",
-                        value: 'AUCTION',
-                        icon: Icons.gavel,
-                        color: Colors.amber
-                    ),
-                    const Divider(color: Colors.white10),
-                    _buildRadioTile(
-                        title: "Modo Sobres",
-                        subtitle: "Equipo aleatorio equilibrado.",
-                        value: 'PACKS',
-                        icon: Icons.card_giftcard,
-                        color: Colors.purple
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // --- TARJETA COMPETICIONES ---
-              _buildSectionTitle("COMPETICIONES"),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: _cardDecoration(),
-                child: Column(
-                  children: [
-                    _buildSwitchTile("Liga", "Todos contra todos", _hasLeague, (v) => setState(() => _hasLeague = v), Icons.format_list_numbered, Colors.blue),
-                    const Divider(color: Colors.white10),
-                    _buildSwitchTile("Copa", "Eliminación directa (Playoffs)", _hasCup, (v) => setState(() => _hasCup = v), Icons.emoji_events, Colors.orange),
-                    const Divider(color: Colors.white10),
-                    _buildSwitchTile("Champions", "Fase de Grupos + Eliminatorias", _hasChampions, (v) => setState(() => _hasChampions = v), Icons.star, Colors.indigoAccent),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // --- BOTÓN CREAR ---
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _createSeason,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF0D1B2A),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    elevation: 5,
+                      const SizedBox(height: 5),
+                      const Text("Define el tamaño de la sala. Puedes rellenar con bots después.", style: TextStyle(color: Colors.white30, fontSize: 11), textAlign: TextAlign.center),
+                    ],
                   ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Color(0xFF0D1B2A))
-                      : const Text("LANZAR TEMPORADA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1)),
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
+
+                const SizedBox(height: 30),
+
+                // --- SECCIÓN FORMATO ---
+                _buildSectionTitle("MECÁNICA DE FICHAJES"),
+                _GlassCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _buildRadioTile(
+                          title: "SUBASTA EN VIVO",
+                          subtitle: "Presupuesto de 100M. Puja estratégica en tiempo real.",
+                          value: 'AUCTION',
+                          icon: Icons.gavel_rounded,
+                          color: goldColor
+                      ),
+                      Divider(color: Colors.white.withOpacity(0.05), height: 1),
+                      _buildRadioTile(
+                          title: "APERTURA DE SOBRES",
+                          subtitle: "Suerte y azar. Equipos equilibrados por el destino.",
+                          value: 'PACKS',
+                          icon: Icons.flash_on_rounded,
+                          color: Colors.purpleAccent
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // --- SECCIÓN COMPETICIONES ---
+                _buildSectionTitle("TORNEOS ACTIVOS"),
+                _GlassCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _buildSwitchTile("LIGA", "Formato todos contra todos (Ida/Vuelta)", _hasLeague, (v) => setState(() => _hasLeague = v), Icons.table_chart_rounded, Colors.blueAccent),
+                      Divider(color: Colors.white.withOpacity(0.05), height: 1),
+                      _buildSwitchTile("COPA", "Eliminación directa (Playoffs)", _hasCup, (v) => setState(() => _hasCup = v), Icons.emoji_events_rounded, Colors.orangeAccent),
+                      Divider(color: Colors.white.withOpacity(0.05), height: 1),
+                      _buildSwitchTile("CHAMPIONS", "Grupos + Eliminatorias (Top Teams)", _hasChampions, (v) => setState(() => _hasChampions = v), Icons.star_rounded, Colors.indigoAccent),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 50),
+
+                // --- BOTÓN CREAR ---
+                Container(
+                  decoration: BoxDecoration(
+                      boxShadow: [BoxShadow(color: goldColor.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 5))]
+                  ),
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _createSeason,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: goldColor,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3))
+                        : const Text("INICIAR TEMPORADA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -226,17 +255,11 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 10, bottom: 8),
-      child: Text(title, style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-    );
-  }
-
-  BoxDecoration _cardDecoration() {
-    return BoxDecoration(
-        color: const Color(0xFF1B263B),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))]
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Text(
+          title,
+          style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2)
+      ),
     );
   }
 
@@ -244,31 +267,63 @@ class _CreateSeasonScreenState extends State<CreateSeasonScreen> {
     bool selected = _acquisitionMode == value;
     return RadioListTile(
       activeColor: color,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      title: Text(title, style: TextStyle(color: selected ? Colors.white : Colors.white70, fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle, style: TextStyle(color: Colors.white38, fontSize: 12)),
-      secondary: Icon(icon, color: selected ? color : Colors.grey),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      title: Text(title, style: TextStyle(color: selected ? Colors.white : Colors.white60, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1)),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4.0),
+        child: Text(subtitle, style: TextStyle(color: Colors.white38, fontSize: 12)),
+      ),
+      secondary: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: selected ? color.withOpacity(0.2) : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+        child: Icon(icon, color: selected ? color : Colors.white24),
+      ),
       value: value,
       groupValue: _acquisitionMode,
       onChanged: (v) => setState(() => _acquisitionMode = v.toString()),
+      controlAffinity: ListTileControlAffinity.trailing,
     );
   }
 
   Widget _buildSwitchTile(String title, String subtitle, bool value, Function(bool) onChanged, IconData icon, Color color) {
     return SwitchListTile(
       activeColor: color,
-      inactiveThumbColor: Colors.grey,
+      inactiveThumbColor: Colors.grey[800],
       inactiveTrackColor: Colors.black26,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-      secondary: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: color, size: 20),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1)),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4.0),
+        child: Text(subtitle, style: const TextStyle(color: Colors.white38, fontSize: 12)),
       ),
+      secondary: Icon(icon, color: value ? color : Colors.white24, size: 24),
       value: value,
       onChanged: onChanged,
+    );
+  }
+}
+
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  const _GlassCard({required this.child, this.padding = const EdgeInsets.all(24)});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 }

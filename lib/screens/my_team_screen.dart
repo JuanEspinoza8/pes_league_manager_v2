@@ -132,14 +132,22 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Editar Nombre"),
+          backgroundColor: const Color(0xFF1E293B), // Fondo oscuro
+          title: const Text("Editar Nombre", style: TextStyle(color: Colors.white)),
           content: TextField(
             controller: _nameCtrl,
-            decoration: const InputDecoration(labelText: "Nombre del Equipo", border: OutlineInputBorder()),
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+                labelText: "Nombre del Equipo",
+                labelStyle: TextStyle(color: Colors.white54),
+                border: OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24))
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.white54))),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
               onPressed: () async {
                 if (_nameCtrl.text.trim().isEmpty) return;
                 await FirebaseFirestore.instance
@@ -163,15 +171,25 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text("Ofertar por ${playerDoc['name']}"),
+          backgroundColor: const Color(0xFF1E293B),
+          title: Text("Ofertar por ${playerDoc['name']}", style: const TextStyle(color: Colors.white)),
           content: TextField(
             controller: amountCtrl,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: "Monto (\$)", prefixText: "\$", border: OutlineInputBorder()),
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+                labelText: "Monto (\$)",
+                prefixText: "\$",
+                labelStyle: TextStyle(color: Colors.white54),
+                prefixStyle: TextStyle(color: Colors.greenAccent),
+                border: OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24))
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.white54))),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
               onPressed: () async {
                 int amount = int.tryParse(amountCtrl.text) ?? 0;
                 if (amount <= 0) return;
@@ -196,27 +214,29 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (teamData == null) return const Scaffold(body: Center(child: Text("Error cargando equipo")));
+    if (isLoading) return const Scaffold(backgroundColor: Color(0xFF0B1120), body: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))));
+    if (teamData == null) return const Scaffold(backgroundColor: Color(0xFF0B1120), body: Center(child: Text("Error cargando equipo", style: TextStyle(color: Colors.white))));
 
     String name = teamData!['teamName'] ?? "Sin Nombre";
     int budget = teamData!['budget'] ?? 0;
     bool isMyTeam = (widget.userId == currentUserId);
+    final goldColor = const Color(0xFFD4AF37);
 
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F5),
+        backgroundColor: const Color(0xFF0B1120), // Fondo V2
         appBar: AppBar(
-          title: Text(name.toUpperCase()),
-          backgroundColor: const Color(0xFF0D1B2A),
+          title: Text(name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+          backgroundColor: const Color(0xFF0F172A),
           foregroundColor: Colors.white,
           centerTitle: true,
+          elevation: 0,
           actions: [
             if (isMyTeam) ...[
               // NUEVO BOTÓN PATROCINIOS
               IconButton(
-                icon: const Icon(Icons.monetization_on_outlined, color: Colors.amber),
+                icon: const Icon(Icons.monetization_on_outlined, color: Colors.greenAccent),
                 tooltip: "Patrocinios",
                 onPressed: () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => SponsorshipScreen(
@@ -227,19 +247,19 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.edit),
+                icon: const Icon(Icons.edit_outlined),
                 tooltip: "Cambiar nombre del equipo",
                 onPressed: _showEditTeamNameDialog,
               ),
             ]
           ],
-          bottom: const TabBar(
-            indicatorColor: Colors.amber,
-            labelColor: Colors.amber,
-            unselectedLabelColor: Colors.white54,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold),
-            tabs: [
-              Tab(text: "RENDIMIENTO"),
+          bottom: TabBar(
+            indicatorColor: goldColor,
+            labelColor: goldColor,
+            unselectedLabelColor: Colors.white38,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            tabs: const [
+              Tab(text: "ANÁLISIS"),
               Tab(text: "PLANTILLA"),
               Tab(text: "FIXTURE"),
             ],
@@ -253,15 +273,15 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
                 userId: widget.userId
             )));
           },
-          backgroundColor: Colors.amber,
+          backgroundColor: goldColor,
           foregroundColor: Colors.black,
-          icon: const Icon(Icons.stadium),
-          label: const Text("ESTRATEGIA"),
+          icon: const Icon(Icons.sports_soccer),
+          label: const Text("ESTRATEGIA", style: TextStyle(fontWeight: FontWeight.bold)),
         ) : null,
 
         body: TabBarView(
           children: [
-            _buildPerformanceTab(name, budget),
+            _buildPerformanceTab(name, budget, goldColor),
             _buildRosterTab(isMyTeam),
             _buildFixtureTab(),
           ],
@@ -271,7 +291,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
   }
 
   // --- TAB 1: RENDIMIENTO ---
-  Widget _buildPerformanceTab(String name, int budget) {
+  Widget _buildPerformanceTab(String name, int budget, Color goldColor) {
     int matchesPlayed = playedMatches.length;
     int wins = 0;
     int goalsScored = 0;
@@ -320,48 +340,51 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     double avgPasses = matchesPlayed > 0 ? totalPasses / matchesPlayed : 0;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  const Icon(Icons.shield, size: 60, color: Color(0xFF0D1B2A)),
-                  const SizedBox(height: 10),
-                  Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                  const SizedBox(height: 5),
-                  Text("Presupuesto: \$${(budget/1000000).toStringAsFixed(1)}M", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.w900)),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [const Color(0xFF1E293B), Colors.black.withOpacity(0.8)]),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 4))]
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.shield, size: 50, color: goldColor),
+                const SizedBox(height: 10),
+                Text(name.toUpperCase(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2), textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                Text("PRESUPUESTO DISPONIBLE", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, letterSpacing: 1.5)),
+                Text("\$${(budget/1000000).toStringAsFixed(1)}M", style: const TextStyle(fontSize: 24, color: Colors.greenAccent, fontWeight: FontWeight.w900)),
+              ],
             ),
           ),
 
-          const SizedBox(height: 20),
-          const Align(alignment: Alignment.centerLeft, child: Text("ANÁLISIS TÁCTICO (Promedios)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey))),
-          const SizedBox(height: 10),
+          const SizedBox(height: 30),
+          const Align(alignment: Alignment.centerLeft, child: Text("ESTADÍSTICAS DE TEMPORADA", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.white30, letterSpacing: 1.5))),
+          const SizedBox(height: 15),
 
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 2.5,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
+            childAspectRatio: 2.0,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
             children: [
-              _statBox("% Victorias", "${winPercentage.toStringAsFixed(1)}%", Icons.emoji_events, Colors.amber[800]!),
-              _statBox("Goles / Partido", avgGoals.toStringAsFixed(1), Icons.sports_soccer, Colors.green),
-              _statBox("Tiros al Arco", avgShots.toStringAsFixed(1), Icons.gps_fixed, Colors.blue),
-              _statBox("Efectividad", "${effectiveness.toStringAsFixed(0)}%", Icons.bolt, Colors.orange),
-              _statBox("Posesión", "${avgPossession.toStringAsFixed(0)}%", Icons.pie_chart, Colors.purple),
-              _statBox("Pases por Partido", avgPasses.toStringAsFixed(0), Icons.loop, Colors.grey),
-              _statBox("Precisión Pases", "${passAccuracy.toStringAsFixed(0)}%", Icons.check_circle, Colors.teal),
-              _statBox("Vallas Invictas", "$cleanSheets", Icons.lock_outline, Colors.indigo),
-              _statBox("Intercepciones/PJ", avgInterceptions.toStringAsFixed(1), Icons.content_cut, Colors.redAccent),
-              _statBox("Faltas/PJ", avgFouls.toStringAsFixed(1), Icons.mood_bad, Colors.brown),
+              _statBox("% VICTORIAS", "${winPercentage.toStringAsFixed(1)}%", Icons.emoji_events, goldColor),
+              _statBox("GOLES / PJ", avgGoals.toStringAsFixed(1), Icons.sports_soccer, Colors.greenAccent),
+              _statBox("TIROS / PJ", avgShots.toStringAsFixed(1), Icons.gps_fixed, Colors.blueAccent),
+              _statBox("EFECTIVIDAD", "${effectiveness.toStringAsFixed(0)}%", Icons.bolt, Colors.orangeAccent),
+              _statBox("POSESIÓN", "${avgPossession.toStringAsFixed(0)}%", Icons.pie_chart, Colors.purpleAccent),
+              _statBox("PASES / PJ", avgPasses.toStringAsFixed(0), Icons.loop, Colors.grey),
+              _statBox("PRECISIÓN", "${passAccuracy.toStringAsFixed(0)}%", Icons.check_circle, Colors.tealAccent),
+              _statBox("VALLAS EN 0", "$cleanSheets", Icons.lock_outline, Colors.indigoAccent),
+              _statBox("QUITES / PJ", avgInterceptions.toStringAsFixed(1), Icons.content_cut, Colors.redAccent),
+              _statBox("FALTAS / PJ", avgFouls.toStringAsFixed(1), Icons.mood_bad, Colors.brown),
             ],
           ),
           const SizedBox(height: 100), // Espacio para FAB
@@ -372,18 +395,22 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
 
   Widget _statBox(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.05))
+      ),
       child: Row(
         children: [
-          CircleAvatar(backgroundColor: color.withOpacity(0.1), radius: 18, child: Icon(icon, color: color, size: 18)),
-          const SizedBox(width: 10),
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-              Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
+              Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(label, style: const TextStyle(fontSize: 9, color: Colors.white54, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
             ],
           )
         ],
@@ -393,7 +420,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
 
   // --- TAB 2: PLANTILLA ---
   Widget _buildRosterTab(bool isMyTeam) {
-    if (rosterDocs.isEmpty) return const Center(child: Text("Sin jugadores en plantilla"));
+    if (rosterDocs.isEmpty) return const Center(child: Text("Sin jugadores en plantilla", style: TextStyle(color: Colors.white54)));
 
     rosterDocs.sort((a, b) {
       var dA = a.data() as Map<String, dynamic>;
@@ -402,7 +429,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     });
 
     return ListView.builder(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(16),
       itemCount: rosterDocs.length,
       itemBuilder: (context, index) {
         var data = rosterDocs[index].data() as Map<String, dynamic>;
@@ -412,18 +439,29 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
         int age = data['age'] ?? 0;
         int value = data['value'] ?? 0;
 
-        return Card(
-          elevation: 1,
-          margin: const EdgeInsets.only(bottom: 8),
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.05))
+          ),
           child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: _getRatingColor(rating),
-              child: Text("$rating", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: Container(
+              width: 42, height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: _getRatingColor(rating),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 1.5)
+              ),
+              child: Text("$rating", style: TextStyle(color: rating >= 80 ? Colors.black : Colors.white, fontWeight: FontWeight.w900)),
             ),
-            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text("$pos • $age años"),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            subtitle: Text("$pos • $age años", style: const TextStyle(color: Colors.white54, fontSize: 12)),
             trailing: value > 0
-                ? Text("\$${(value/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold))
+                ? Text("\$${(value/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.bold))
                 : (!isMyTeam ? const Icon(Icons.monetization_on, color: Colors.green) : null),
 
             onTap: !isMyTeam ? () => _showOfferDialog(rosterDocs[index]) : null,
@@ -497,7 +535,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
           .collection('matches')
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
 
         var allMatches = snapshot.data!.docs;
 
@@ -520,9 +558,9 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
           return const Center(child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.event_available, size: 60, color: Colors.grey),
-              SizedBox(height: 10),
-              Text("No tienes partidos próximos confirmados.", style: TextStyle(color: Colors.grey)),
+              Icon(Icons.event_available, size: 50, color: Colors.white24),
+              SizedBox(height: 15),
+              Text("No tienes partidos próximos confirmados.", style: TextStyle(color: Colors.white24)),
             ],
           ));
         }
@@ -544,54 +582,65 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
             String opponentName = allTeamNames[opponentId] ?? "Desconocido";
             String roundTitle = _getFriendlyRoundName(data);
 
-            Color cardColor;
-            if (data['type'] == 'LEAGUE') cardColor = const Color(0xFF0D1B2A);
-            else if (data['type'] == 'CUP') cardColor = const Color(0xFFE63946);
-            else cardColor = const Color(0xFF1E88E5);
+            Color accentColor;
+            if (data['type'] == 'LEAGUE') accentColor = Colors.white10;
+            else if (data['type'] == 'CUP') accentColor = Colors.orangeAccent.withOpacity(0.3);
+            else accentColor = Colors.indigoAccent.withOpacity(0.3);
 
-            return Card(
-              elevation: 3,
+            return Container(
               margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B), // Card BG
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.05))
+              ),
               child: Column(
                 children: [
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                     decoration: BoxDecoration(
-                      color: cardColor,
+                      color: accentColor,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     ),
                     child: Text(
                       roundTitle,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                      style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 1.5),
                       textAlign: TextAlign.center,
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                     child: Row(
                       children: [
-                        Icon(amHome ? Icons.home : Icons.flight_takeoff, color: Colors.grey, size: 24),
+                        Icon(amHome ? Icons.home_filled : Icons.flight, color: Colors.white38, size: 20),
                         const SizedBox(width: 15),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(opponentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              Text(opponentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                               const SizedBox(height: 4),
                               Text(
                                 amHome ? "Juegas de LOCAL" : "Juegas de VISITA",
                                 style: TextStyle(
-                                    color: amHome ? Colors.blue[800] : Colors.orange[800],
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold
+                                    color: amHome ? Colors.blueAccent : Colors.orangeAccent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        Text("VS", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.withOpacity(0.3))),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                              border: Border.all(color: Colors.white24),
+                              borderRadius: BorderRadius.circular(8)
+                          ),
+                          child: const Text("VS", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white54)),
+                        ),
                       ],
                     ),
                   ),
@@ -605,9 +654,9 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
   }
 
   Color _getRatingColor(int r) {
-    if (r >= 90) return Colors.black;
-    if (r >= 85) return const Color(0xFFD4AF37);
-    if (r >= 80) return const Color(0xFFC0C0C0);
-    return const Color(0xFFCD7F32);
+    if (r >= 90) return Colors.cyanAccent; // Iconic V2
+    if (r >= 85) return const Color(0xFFD4AF37); // Gold
+    if (r >= 80) return Colors.grey; // Silver
+    return const Color(0xFFCD7F32); // Bronze
   }
 }

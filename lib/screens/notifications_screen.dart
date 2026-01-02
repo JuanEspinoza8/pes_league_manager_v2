@@ -9,13 +9,13 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A), // Fondo Oscuro Premium
+      backgroundColor: const Color(0xFF0B1120),
       appBar: AppBar(
-        title: const Text("NOTICIAS Y PRENSA", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-        backgroundColor: const Color(0xFF0D1B2A),
+        title: const Text("PRENSA OFICIAL", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
+        backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
-        elevation: 0,
         centerTitle: true,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -25,17 +25,17 @@ class NotificationsScreen extends StatelessWidget {
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
           var docs = snapshot.data!.docs;
 
           if (docs.isEmpty) {
-            return Center(
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.newspaper, size: 80, color: Colors.white.withOpacity(0.1)),
-                  const SizedBox(height: 20),
-                  Text("Sin novedades por ahora", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 16)),
+                  Icon(Icons.newspaper, size: 60, color: Colors.white10),
+                  SizedBox(height: 10),
+                  Text("Sin novedades por ahora", style: TextStyle(color: Colors.white24)),
                 ],
               ),
             );
@@ -46,37 +46,36 @@ class NotificationsScreen extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (context, index) {
               var data = docs[index].data() as Map<String, dynamic>;
-              String type = data['type'] ?? 'INFO'; // MATCH, TRANSFER, AUCTION, INFO
+              String type = data['type'] ?? 'INFO';
               Timestamp? ts = data['createdAt'];
-
-              // Calcular tiempo relativo
               String timeStr = "";
               if (ts != null) {
-                timeStr = timeago.format(ts.toDate(), locale: 'en_short'); // Muestra "5m", "2h", etc.
+                timeStr = timeago.format(ts.toDate(), locale: 'en_short');
               }
 
-              return Card(
+              return Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                color: const Color(0xFF1B263B), // Tarjeta oscura
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 3,
+                decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B), // Tarjeta oscura V2
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 5)]
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ICONO SEGÚN TIPO
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: _getIconBgColor(type).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
+                            color: _getIconBgColor(type).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _getIconBgColor(type).withOpacity(0.3))
                         ),
                         child: Icon(_getIcon(type), color: _getIconBgColor(type), size: 24),
                       ),
                       const SizedBox(width: 16),
-
-                      // CONTENIDO
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

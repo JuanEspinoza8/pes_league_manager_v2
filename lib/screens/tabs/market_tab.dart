@@ -50,7 +50,7 @@ class MarketTab extends StatelessWidget {
 
     TextEditingController ctrl = TextEditingController();
     showDialog(context: context, builder: (c) => AlertDialog(
-      backgroundColor: const Color(0xFF1B263B),
+      backgroundColor: const Color(0xFF1E293B),
       title: const Text("OFERTAR POR DESCARTE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -61,11 +61,13 @@ class MarketTab extends StatelessWidget {
               controller: ctrl,
               keyboardType: TextInputType.number,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                   labelText: "Tu Oferta",
                   prefixText: "\$ ",
-                  labelStyle: TextStyle(color: Colors.white60),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24))
+                  labelStyle: const TextStyle(color: Colors.white60),
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)
               )
           ),
         ],
@@ -73,7 +75,7 @@ class MarketTab extends StatelessWidget {
       actions: [
         TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancelar", style: TextStyle(color: Colors.white38))),
         ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
             onPressed: () async {
               int bid = int.tryParse(ctrl.text) ?? 0;
               int currentHighest = auctionDoc['highestBid'] ?? 0;
@@ -95,7 +97,7 @@ class MarketTab extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fondos insuficientes"), backgroundColor: Colors.red));
               }
             },
-            child: const Text("CONFIRMAR OFERTA", style: TextStyle(color: Colors.white))
+            child: const Text("CONFIRMAR OFERTA", style: TextStyle(fontWeight: FontWeight.bold))
         )
       ],
     ));
@@ -144,7 +146,7 @@ class MarketTab extends StatelessWidget {
                   'budget': FieldValue.increment(-amount),
                   'roster': FieldValue.arrayUnion([playerId])
                 });
-                // Marcar jugador como tomado globalmente (ya estaba en 'takenIds' técnicamente, pero aseguramos)
+                // Marcar jugador como tomado globalmente
                 tx.update(seasonRef, {'takenPlayerIds': FieldValue.arrayUnion([playerId])});
                 tx.update(doc.reference, {'status': 'COMPLETED', 'winnerId': winnerId});
               } else {
@@ -169,6 +171,8 @@ class MarketTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const goldColor = Color(0xFFD4AF37);
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +182,7 @@ class MarketTab extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-              color: Colors.redAccent,
+              color: Colors.red.withOpacity(0.8),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -197,29 +201,35 @@ class MarketTab extends StatelessWidget {
             child: InkWell(
               onTap: isMarketOpen ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => MidSeasonShop(seasonId: seasonId))) : null,
               child: Container(
-                height: 110,
+                height: 120,
                 decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF2575FC)]),
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]
+                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 5))]
                 ),
                 child: Row(
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Icon(Icons.storefront, color: Colors.white, size: 40),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+                      margin: const EdgeInsets.only(left: 20),
+                      child: const Icon(Icons.storefront, color: Colors.white, size: 30),
                     ),
                     Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("TIENDA & SACRIFICIO", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-                          Text(
-                              isMarketOpen ? "Compra sobres descartando jugadores" : "Tienda cerrada",
-                              style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("TIENDA & SACRIFICIO", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                            const SizedBox(height: 4),
+                            Text(
+                                isMarketOpen ? "Compra sobres descartando jugadores" : "Tienda cerrada por el admin",
+                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12)
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const Padding(
@@ -232,20 +242,38 @@ class MarketTab extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 30),
+          const SizedBox(height: 40),
 
           // 2. OPORTUNIDADES (DESCARTES)
-          const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("OPORTUNIDADES (Descartes)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900))),
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const Icon(Icons.local_offer_outlined, color: goldColor, size: 20),
+                  const SizedBox(width: 10),
+                  Text("OPORTUNIDADES (Descartes)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 1)),
+                ],
+              )
+          ),
+          const SizedBox(height: 15),
+
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('discard_auctions').where('status', isEqualTo: 'ACTIVE').snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text("No hay jugadores descartados."));
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(15)),
+                  child: const Text("No hay jugadores en subasta de descarte.", style: TextStyle(color: Colors.white38), textAlign: TextAlign.center),
+                );
+              }
 
-              // Filtro visual: mostrar todas las activas (incluso vencidas, para que el admin las vea y liquide)
               var docs = snapshot.data!.docs;
 
               return SizedBox(
-                height: 160,
+                height: 170,
                 child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -261,24 +289,36 @@ class MarketTab extends StatelessWidget {
                       return GestureDetector(
                         onTap: isExpired ? null : () => _bidOnDiscard(doc, context),
                         child: Container(
-                          width: 130, margin: const EdgeInsets.all(8),
+                          width: 140,
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: BoxDecoration(
-                              color: isExpired ? Colors.grey[200] : Colors.white,
+                              color: const Color(0xFF1E293B),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: isExpired ? Colors.grey : Colors.redAccent),
-                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]
+                              border: Border.all(color: isExpired ? Colors.white10 : Colors.redAccent.withOpacity(0.5)),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8)]
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(timeLeft, style: TextStyle(color: isExpired ? Colors.grey : Colors.red, fontWeight: FontWeight.bold, fontSize: 10)),
-                              const SizedBox(height: 5),
-                              CircleAvatar(backgroundColor: Colors.grey[300], radius: 25, child: Text("${data['rating']}", style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.black))),
-                              const SizedBox(height: 5),
-                              Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text(data['playerName'], textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                              const Divider(height: 10),
-                              Text("\$${(data['highestBid']/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
-                              if (!isExpired) const Text("Toca para pujar", style: TextStyle(fontSize: 8, color: Colors.grey))
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(color: isExpired ? Colors.grey : Colors.redAccent, borderRadius: BorderRadius.circular(4)),
+                                child: Text(timeLeft, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                              ),
+                              const SizedBox(height: 10),
+                              CircleAvatar(
+                                  backgroundColor: const Color(0xFF0F172A),
+                                  radius: 22,
+                                  child: Text("${data['rating']}", style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white))
+                              ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: Text(data['playerName'], textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white))
+                              ),
+                              const SizedBox(height: 8),
+                              Text("\$${(data['highestBid']/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, fontSize: 16)),
+                              if (!isExpired) const Text("Toca para pujar", style: TextStyle(fontSize: 8, color: Colors.white30))
                             ],
                           ),
                         ),
@@ -295,13 +335,17 @@ class MarketTab extends StatelessWidget {
             builder: (context, snapshot) {
               if (snapshot.data == true) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.gavel, size: 18),
                       label: const Text("ADMIN: LIQUIDAR VENCIDAS"),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[800],
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
                       onPressed: () => _resolveExpiredAuctions(context),
                     ),
                   ),
@@ -312,17 +356,26 @@ class MarketTab extends StatelessWidget {
           ),
 
           const SizedBox(height: 20),
-          const Divider(thickness: 5, color: Colors.white),
+          Divider(color: Colors.white.withOpacity(0.1)),
           const SizedBox(height: 20),
 
           // 3. RIVALES
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text("RIVALES", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Theme.of(context).primaryColor))),
-          const SizedBox(height: 10),
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const Icon(Icons.visibility_outlined, color: goldColor, size: 20),
+                  const SizedBox(width: 10),
+                  Text("ESPIONAJE (Rivales)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white.withOpacity(0.9), letterSpacing: 1)),
+                ],
+              )
+          ),
+          const SizedBox(height: 15),
 
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('participants').snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: LinearProgressIndicator());
+              if (!snapshot.hasData) return const Center(child: LinearProgressIndicator(color: goldColor));
               return SizedBox(
                 height: 140,
                 child: ListView.builder(
@@ -338,14 +391,23 @@ class MarketTab extends StatelessWidget {
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SquadBuilderScreen(seasonId: seasonId, userId: uid, isReadOnly: true))),
                       child: Container(
                         width: 120, margin: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 6)],
+                            border: Border.all(color: Colors.white.withOpacity(0.05))
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            CircleAvatar(backgroundColor: Colors.blue[900], child: Text(data['teamName'][0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                            const SizedBox(height: 8),
-                            Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(data['teamName'], textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                            Text("\$${((data['budget']??0)/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                            CircleAvatar(
+                                backgroundColor: Colors.black,
+                                child: Text(data['teamName'][0].toUpperCase(), style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold))
+                            ),
+                            const SizedBox(height: 10),
+                            Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(data['teamName'], textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white))),
+                            const SizedBox(height: 4),
+                            Text("\$${((data['budget']??0)/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -357,21 +419,22 @@ class MarketTab extends StatelessWidget {
           ),
 
           const SizedBox(height: 30),
-          const Divider(thickness: 5, color: Colors.white),
+          Divider(color: Colors.white.withOpacity(0.1)),
           const SizedBox(height: 20),
 
           // 4. HISTORIAL
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text("ÚLTIMOS FICHAJES", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.grey[800]))),
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text("ÚLTIMOS FICHAJES", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white54, letterSpacing: 1))),
+          const SizedBox(height: 10),
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('transfers').where('status', isEqualTo: 'ACCEPTED').limit(10).snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text("Sin movimientos recientes."));
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text("Sin movimientos recientes.", style: TextStyle(color: Colors.white38)));
               return ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: snapshot.data!.docs.length,
-                separatorBuilder: (c, i) => const Divider(height: 1),
+                separatorBuilder: (c, i) => Divider(height: 1, color: Colors.white.withOpacity(0.05)),
                 itemBuilder: (context, index) => _TransferHistoryItem(transferDoc: snapshot.data!.docs[index], seasonId: seasonId),
               );
             },
@@ -399,10 +462,10 @@ class _TransferHistoryItem extends StatelessWidget {
         String buyerName = snapshot.hasData ? snapshot.data![0].get('teamName') : "...";
         String sellerName = snapshot.hasData ? snapshot.data![1].get('teamName') : "...";
         return ListTile(
-          leading: const Icon(Icons.sync_alt, color: Colors.green),
-          title: Text(data['targetPlayerName'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          subtitle: Text("$buyerName ➔ $sellerName", style: const TextStyle(fontSize: 12)),
-          trailing: Text("\$${(data['offeredAmount']/1000000).toStringAsFixed(1)}M", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+          leading: const Icon(Icons.sync_alt, color: Colors.greenAccent),
+          title: Text(data['targetPlayerName'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+          subtitle: Text("$buyerName ➔ $sellerName", style: const TextStyle(fontSize: 12, color: Colors.white54)),
+          trailing: Text("\$${(data['offeredAmount']/1000000).toStringAsFixed(1)}M", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent)),
         );
       },
     );

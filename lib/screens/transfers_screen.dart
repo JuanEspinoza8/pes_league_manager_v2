@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
-import '../services/news_service.dart'; // <--- IMPORTANTE: Import agregado
+import '../services/news_service.dart';
 
 class TransfersScreen extends StatefulWidget {
   final String seasonId;
@@ -13,6 +13,7 @@ class TransfersScreen extends StatefulWidget {
 }
 
 class _TransfersScreenState extends State<TransfersScreen> {
+  // --- LÓGICA INTACTA ---
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
   Future<void> _acceptOffer(DocumentSnapshot offerDoc) async {
@@ -27,12 +28,10 @@ class _TransfersScreenState extends State<TransfersScreen> {
     final seasonRef = db.collection('seasons').doc(widget.seasonId);
 
     try {
-      // Obtenemos nombres antes de la transacción
       String buyerName = await _getTeamName(buyerId);
       String sellerName = await _getTeamName(sellerId);
       String playerName = data['targetPlayerName'];
 
-      // 1. TRANSACCIÓN (MOVIMIENTO DE DINERO Y JUGADORES)
       await db.runTransaction((transaction) async {
         DocumentReference buyerRef = seasonRef.collection('participants').doc(buyerId);
         DocumentReference sellerRef = seasonRef.collection('participants').doc(sellerId);
@@ -48,15 +47,12 @@ class _TransfersScreenState extends State<TransfersScreen> {
         if (buyerBudget < amount) throw "El comprador no tiene fondos suficientes";
         if (!sellerRoster.contains(targetPlayerId)) throw "Ya no tienes a este jugador";
 
-        // Dinero
         transaction.update(buyerRef, {'budget': buyerBudget - amount});
         transaction.update(sellerRef, {'budget': sellerBudget + amount});
 
-        // Jugador Principal
         sellerRoster.remove(targetPlayerId);
         buyerRoster.add(targetPlayerId);
 
-        // Jugador de Cambio (Swap)
         if (swapPlayerId != null) {
           if (!buyerRoster.contains(swapPlayerId)) throw "El comprador ya no tiene al jugador de cambio";
           buyerRoster.remove(swapPlayerId);
@@ -68,8 +64,6 @@ class _TransfersScreenState extends State<TransfersScreen> {
         transaction.update(offerDoc.reference, {'status': 'ACCEPTED'});
       });
 
-      // 2. GENERAR NOTICIA DE TRASPASO (NUEVO CÓDIGO)
-      // Lo hacemos "blindado" para que si falla la IA, no cancele el traspaso visualmente
       try {
         NewsService().createTransferNews(
           seasonId: widget.seasonId,
@@ -82,7 +76,6 @@ class _TransfersScreenState extends State<TransfersScreen> {
         print("⚠️ Error generando noticia de traspaso (no crítico): $newsError");
       }
 
-      // 3. NOTIFICACIÓN PUSH
       String amountStr = amount > 0 ? "por \$${(amount/1000000).toStringAsFixed(1)}M" : "gratis";
       String swapStr = swapPlayerId != null ? " + ${data['swapPlayerName']}" : "";
 
@@ -111,31 +104,41 @@ class _TransfersScreenState extends State<TransfersScreen> {
   Future<void> _rejectOffer(String transferId) async {
     await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('transfers').doc(transferId).update({'status': 'REJECTED'});
   }
+  // --- FIN LÓGICA ---
 
   @override
   Widget build(BuildContext context) {
+    const goldColor = Color(0xFFD4AF37);
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F5),
+        backgroundColor: const Color(0xFF0B1120),
         appBar: AppBar(
-          title: const Text("BUZÓN DE FICHAJES", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-          backgroundColor: const Color(0xFF0D1B2A),
+          title: const Text("BUZÓN DE FICHAJES", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 18)),
+          backgroundColor: const Color(0xFF0F172A),
           foregroundColor: Colors.white,
           centerTitle: true,
-          bottom: const TabBar(
-            indicatorColor: Colors.amber,
-            labelColor: Colors.amber,
-            unselectedLabelColor: Colors.white54,
-            labelStyle: TextStyle(fontWeight: FontWeight.bold),
-            tabs: [Tab(text: "RECIBIDAS"), Tab(text: "ENVIADAS")],
+          elevation: 0,
+          bottom: TabBar(
+            indicatorColor: goldColor,
+            labelColor: goldColor,
+            unselectedLabelColor: Colors.white38,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+            indicatorWeight: 3,
+            tabs: const [Tab(text: "RECIBIDAS"), Tab(text: "ENVIADAS")],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildList(isReceived: true),
-            _buildList(isReceived: false),
-          ],
+        body: Container(
+          decoration: const BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0F172A), Color(0xFF0B1120)])
+          ),
+          child: TabBarView(
+            children: [
+              _buildList(isReceived: true),
+              _buildList(isReceived: false),
+            ],
+          ),
         ),
       ),
     );
@@ -149,13 +152,13 @@ class _TransfersScreenState extends State<TransfersScreen> {
           .where(isReceived ? 'toUserId' : 'fromUserId', isEqualTo: currentUserId)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
         if (snapshot.data!.docs.isEmpty) return _buildEmptyState();
 
         var docs = snapshot.data!.docs;
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           itemCount: docs.length,
           itemBuilder: (context, index) {
             var doc = docs[index];
@@ -178,9 +181,9 @@ class _TransfersScreenState extends State<TransfersScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.move_to_inbox, size: 80, color: Colors.grey[300]),
+          Icon(Icons.mark_email_read_outlined, size: 80, color: Colors.white.withOpacity(0.1)),
           const SizedBox(height: 20),
-          Text("No hay movimientos aquí", style: TextStyle(color: Colors.grey[500], fontSize: 18)),
+          Text("No hay movimientos recientes", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -204,55 +207,96 @@ class _TransferCard extends StatelessWidget {
     IconData statusIcon;
 
     switch (data['status']) {
-      case 'ACCEPTED': statusColor = Colors.green; statusText = "ACEPTADA"; statusIcon = Icons.check_circle; break;
-      case 'REJECTED': statusColor = Colors.red; statusText = "RECHAZADA"; statusIcon = Icons.cancel; break;
-      default: statusColor = Colors.orange; statusText = "PENDIENTE"; statusIcon = Icons.hourglass_top;
+      case 'ACCEPTED': statusColor = Colors.greenAccent; statusText = "ACEPTADA"; statusIcon = Icons.check_circle_outline; break;
+      case 'REJECTED': statusColor = Colors.redAccent; statusText = "RECHAZADA"; statusIcon = Icons.cancel_outlined; break;
+      default: statusColor = Colors.amberAccent; statusText = "PENDIENTE"; statusIcon = Icons.hourglass_empty;
     }
 
     String moneyText = data['offeredAmount'] > 0 ? "\$${(data['offeredAmount']/1000000).toStringAsFixed(1)}M" : "";
     String swapName = data['swapPlayerName'] ?? "Ninguno";
     bool hasSwap = data['swapPlayerId'] != null;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
+      decoration: BoxDecoration(
+          color: const Color(0xFF1E293B), // Slate 800
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))]
+      ),
+      child: Column(
+        children: [
+          // Header Estado
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16))
+            ),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Row(children: [Icon(statusIcon, size: 14, color: statusColor), const SizedBox(width: 5), Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12))]),
-                ),
-                if (moneyText.isNotEmpty) Text(moneyText, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 16)),
+                Row(children: [Icon(statusIcon, size: 16, color: statusColor), const SizedBox(width: 8), Text(statusText, style: TextStyle(color: statusColor, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1))]),
+                if (moneyText.isNotEmpty) Text(moneyText, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, fontSize: 18)),
               ],
             ),
-            const Divider(height: 20),
-            Row(
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
               children: [
-                Expanded(child: _PlayerColumn("SOLICITADO", data['targetPlayerName'], Icons.person)),
-                const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Icon(Icons.swap_horiz, color: Colors.grey)),
-                Expanded(child: _PlayerColumn("A CAMBIO", hasSwap ? swapName : "Solo Dinero", hasSwap ? Icons.person_outline : Icons.monetization_on_outlined)),
+                Row(
+                  children: [
+                    Expanded(child: _PlayerColumn("SOLICITADO", data['targetPlayerName'], Icons.person)),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 15), child: Icon(Icons.compare_arrows, color: Colors.white.withOpacity(0.3), size: 30)),
+                    Expanded(child: _PlayerColumn("A CAMBIO", hasSwap ? swapName : "Solo Dinero", hasSwap ? Icons.person_outline : Icons.monetization_on_outlined)),
+                  ],
+                ),
+                if (isPending && isReceived) ...[
+                  const SizedBox(height: 25),
+                  Row(children: [
+                    Expanded(
+                        child: OutlinedButton(
+                            onPressed: onReject,
+                            style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                                side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
+                                padding: const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                            ),
+                            child: const Text("RECHAZAR", style: TextStyle(fontWeight: FontWeight.bold))
+                        )
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                        child: ElevatedButton(
+                            onPressed: onAccept,
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 5
+                            ),
+                            child: const Text("ACEPTAR", style: TextStyle(fontWeight: FontWeight.bold))
+                        )
+                    ),
+                  ])
+                ],
+                if (!isReceived) ...[
+                  const SizedBox(height: 15),
+                  Divider(color: Colors.white.withOpacity(0.1)),
+                  const SizedBox(height: 5),
+                  FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('participants').doc(data['toUserId']).get(),
+                      builder: (c, s) => Text("Enviada a: ${s.data?['teamName'] ?? '...'}", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12, fontStyle: FontStyle.italic))
+                  )
+                ]
               ],
             ),
-            if (isPending && isReceived) ...[
-              const SizedBox(height: 20),
-              Row(children: [
-                Expanded(child: OutlinedButton(onPressed: onReject, style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)), child: const Text("RECHAZAR"))),
-                const SizedBox(width: 15),
-                Expanded(child: ElevatedButton(onPressed: onAccept, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("ACEPTAR"))),
-              ])
-            ],
-            if (!isReceived) ...[
-              const SizedBox(height: 10), const Divider(height: 10),
-              FutureBuilder<DocumentSnapshot>(future: FirebaseFirestore.instance.collection('seasons').doc(seasonId).collection('participants').doc(data['toUserId']).get(), builder: (c, s) => Text("Enviada a: ${s.data?['teamName'] ?? '...'}", style: const TextStyle(color: Colors.grey, fontSize: 11)))
-            ]
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -261,5 +305,23 @@ class _TransferCard extends StatelessWidget {
 class _PlayerColumn extends StatelessWidget {
   final String label; final String name; final IconData icon;
   const _PlayerColumn(this.label, this.name, this.icon);
-  @override Widget build(BuildContext context) { return Column(children: [Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)), const SizedBox(height: 5), Icon(icon, color: const Color(0xFF0D1B2A), size: 28), const SizedBox(height: 5), Text(name, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis)]); }
+  @override Widget build(BuildContext context) {
+    return Column(
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white.withOpacity(0.5), letterSpacing: 1)),
+          const SizedBox(height: 10),
+          Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white10)
+              ),
+              child: Icon(icon, color: Colors.white, size: 24)
+          ),
+          const SizedBox(height: 10),
+          Text(name, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white), maxLines: 2, overflow: TextOverflow.ellipsis)
+        ]
+    );
+  }
 }

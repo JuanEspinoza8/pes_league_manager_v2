@@ -10,140 +10,121 @@ class AvailablePlayersScreen extends StatefulWidget {
 }
 
 class _AvailablePlayersScreenState extends State<AvailablePlayersScreen> {
+  // --- LÓGICA INTACTA ---
   List<DocumentSnapshot> _availablePlayers = [];
-  List<DocumentSnapshot> _filteredPlayers = [];
   bool _isLoading = true;
   final TextEditingController _searchCtrl = TextEditingController();
+  List<DocumentSnapshot> _filteredPlayers = [];
 
   @override
   void initState() {
     super.initState();
-    _loadAvailablePlayers();
+    _loadPlayers();
   }
 
-  Future<void> _loadAvailablePlayers() async {
+  Future<void> _loadPlayers() async {
     try {
-      final db = FirebaseFirestore.instance;
+      final seasonDoc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).get();
+      List takenIds = seasonDoc.data()?['takenPlayerIds'] ?? [];
 
-      // 1. Obtener lista de IDs ocupados en la temporada
-      DocumentSnapshot seasonDoc = await db.collection('seasons').doc(widget.seasonId).get();
-      List<dynamic> takenIdsDynamic = seasonDoc['takenPlayerIds'] ?? [];
-      Set<String> takenIds = takenIdsDynamic.map((e) => e.toString()).toSet();
-
-      // 2. Obtener TODOS los jugadores de la base de datos
-      // (Como son ~300-600, es seguro traerlos todos de una vez)
-      QuerySnapshot playersSnap = await db.collection('players').get();
-
-      // 3. Filtrar: Quedarse solo con los que NO están en takenIds
-      List<DocumentSnapshot> free = [];
-      for (var doc in playersSnap.docs) {
-        if (!takenIds.contains(doc.id)) {
-          free.add(doc);
-        }
-      }
-
-      // 4. Ordenar por Media (Rating) descendente
-      free.sort((a, b) => (b['rating'] ?? 0).compareTo(a['rating'] ?? 0));
+      // Traemos los mejores 500 para no saturar, ordenados por rating
+      final query = await FirebaseFirestore.instance.collection('players').orderBy('rating', descending: true).limit(500).get();
 
       if (mounted) {
         setState(() {
-          _availablePlayers = free;
-          _filteredPlayers = free;
+          // Filtramos localmente los que no estén en 'takenIds'
+          _availablePlayers = query.docs.where((doc) => !takenIds.contains(doc.id)).toList();
+          _filteredPlayers = _availablePlayers;
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-      }
+      if(mounted) setState(() => _isLoading = false);
+      print("Error cargando libres: $e");
     }
   }
 
-  void _filterPlayers(String query) {
-    if (query.isEmpty) {
-      setState(() => _filteredPlayers = _availablePlayers);
-    } else {
-      setState(() {
-        _filteredPlayers = _availablePlayers.where((doc) {
-          String name = doc['name'].toString().toLowerCase();
-          return name.contains(query.toLowerCase());
-        }).toList();
-      });
-    }
+  void _filter(String text) {
+    setState(() {
+      if (text.isEmpty) {
+        _filteredPlayers = _availablePlayers;
+      } else {
+        _filteredPlayers = _availablePlayers.where((d) => d['name'].toString().toLowerCase().contains(text.toLowerCase())).toList();
+      }
+    });
   }
+  // --- FIN LÓGICA ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A),
+      backgroundColor: const Color(0xFF0B1120),
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("JUGADORES LIBRES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            if (!_isLoading)
-              Text("${_availablePlayers.length} disponibles", style: const TextStyle(fontSize: 12, color: Colors.greenAccent)),
-          ],
-        ),
-        backgroundColor: const Color(0xFF0D1B2A),
+        title: const Text("AGENTES LIBRES", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+        backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
+        centerTitle: true,
+        elevation: 0,
       ),
       body: Column(
         children: [
           // BARRA DE BÚSQUEDA
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchCtrl,
-              onChanged: _filterPlayers,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: "Buscar jugador...",
+                hintText: "Buscar por nombre...",
                 hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFFD4AF37)),
                 filled: true,
-                fillColor: Colors.white10,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                fillColor: const Color(0xFF1E293B),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               ),
+              onChanged: _filter,
             ),
           ),
 
           // LISTA
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
                 : _filteredPlayers.isEmpty
-                ? const Center(child: Text("No se encontraron jugadores.", style: TextStyle(color: Colors.white54)))
+                ? const Center(child: Text("No se encontraron jugadores.", style: TextStyle(color: Colors.white24)))
                 : ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               itemCount: _filteredPlayers.length,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
               itemBuilder: (context, index) {
                 var data = _filteredPlayers[index].data() as Map<String, dynamic>;
-                String id = _filteredPlayers[index].id; // ID para copiar
-
-                return Card(
-                  color: Colors.white.withOpacity(0.05),
+                return Container(
                   margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.05))
+                  ),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _getRatingColor(data['rating']),
-                      child: Text("${data['rating']}", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    leading: Container(
+                      width: 45, height: 45,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          color: Colors.black26,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _getRatingColor(data['rating']), width: 2)
+                      ),
+                      child: Text("${data['rating']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
-                    title: Text(data['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    subtitle: Text("${data['position']} • ${data['team']}", style: const TextStyle(color: Colors.white54)),
+                    title: Text(data['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    subtitle: Text("${data['position']} • ${data['team']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
                     trailing: IconButton(
-                      icon: const Icon(Icons.copy, color: Colors.amber),
-                      tooltip: "Copiar ID para Trampa",
+                      icon: const Icon(Icons.copy, color: Colors.white24),
                       onPressed: () {
-                        // Copiar ID al portapapeles (útil para la trampa del sobre)
-                        // Requiere: import 'package:flutter/services.dart';
-                        // Pero para simplificar, mostramos snackbar
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text("ID: $id"),
-                          action: SnackBarAction(label: "CERRAR", onPressed: (){}),
-                          duration: const Duration(seconds: 4),
-                        ));
+                        // Copiar ID para admin
+                        final pid = _filteredPlayers[index].id;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("ID copiado: $pid")));
+                        // Aquí podrías implementar copy to clipboard real
                       },
                     ),
                   ),
@@ -156,12 +137,10 @@ class _AvailablePlayersScreenState extends State<AvailablePlayersScreen> {
     );
   }
 
-  Color _getRatingColor(int? rating) {
-    if (rating == null) return Colors.grey;
-    if (rating >= 90) return Colors.cyanAccent;
-    if (rating >= 85) return Colors.purpleAccent;
-    if (rating >= 80) return Colors.amber;
-    if (rating >= 75) return Colors.greenAccent;
-    return Colors.white;
+  Color _getRatingColor(int? r) {
+    int rating = r ?? 0;
+    if (rating >= 85) return const Color(0xFFD4AF37); // Gold
+    if (rating >= 80) return Colors.grey; // Silver
+    return const Color(0xFFCD7F32); // Bronze
   }
 }

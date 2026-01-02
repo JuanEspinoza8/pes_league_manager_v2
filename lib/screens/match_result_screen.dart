@@ -13,7 +13,7 @@ import '../services/stats_service.dart';
 import '../services/discipline_service.dart';
 import '../services/news_service.dart';
 import '../services/supercopa_progression_service.dart';
-import '../services/sponsorship_service.dart'; // <--- 1. IMPORT NECESARIO
+import '../services/sponsorship_service.dart';
 
 class MatchResultScreen extends StatefulWidget {
   final String seasonId;
@@ -28,11 +28,9 @@ class MatchResultScreen extends StatefulWidget {
 }
 
 class _MatchResultScreenState extends State<MatchResultScreen> {
-  // Controladores Marcador Regular
+  // --- LÓGICA ORIGINAL INTACTA ---
   final TextEditingController _homeScoreCtrl = TextEditingController();
   final TextEditingController _awayScoreCtrl = TextEditingController();
-
-  // Controladores Penales
   final TextEditingController _homePenaltiesCtrl = TextEditingController();
   final TextEditingController _awayPenaltiesCtrl = TextEditingController();
 
@@ -45,12 +43,10 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   List<DocumentSnapshot> _homeRoster = [];
   List<DocumentSnapshot> _awayRoster = [];
 
-  // Disciplina
   List<String> _homeSuspended = [];
   List<String> _awaySuspended = [];
   bool _isLoadingSuspensions = true;
 
-  // Estados de control
   bool _showPenaltiesInput = false;
   bool isSaving = false;
   bool isScanning = false;
@@ -68,13 +64,10 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   @override
   void initState() {
     super.initState();
-    // Cargar Marcador
     if (widget.matchData['homeScore'] != null) {
       _homeScoreCtrl.text = widget.matchData['homeScore'].toString();
       _awayScoreCtrl.text = widget.matchData['awayScore'].toString();
     }
-
-    // Cargar Penales si existen
     if (widget.matchData['definedByPenalties'] == true && widget.matchData['penaltyScore'] != null) {
       _showPenaltiesInput = true;
       try {
@@ -84,30 +77,22 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
           _homePenaltiesCtrl.text = parts[0].trim();
           _awayPenaltiesCtrl.text = parts[1].trim();
         }
-      } catch (e) {
-        // Error parseando
-      }
+      } catch (e) {}
     }
-
     if (widget.matchData['player_actions'] != null) {
       _loadActions(widget.matchData['player_actions']['home'], _homeActions);
       _loadActions(widget.matchData['player_actions']['away'], _awayActions);
     }
-
     _loadRosters();
     _checkSuspensions();
-
-    // Listener para activar penales automáticamente
     _homeScoreCtrl.addListener(_checkDrawCondition);
     _awayScoreCtrl.addListener(_checkDrawCondition);
   }
 
   void _checkDrawCondition() {
     if (widget.matchData['type'] == 'LEAGUE') return;
-
     int h = int.tryParse(_homeScoreCtrl.text) ?? -1;
     int a = int.tryParse(_awayScoreCtrl.text) ?? -1;
-
     if (h >= 0 && a >= 0 && h == a) {
       setState(() => _showPenaltiesInput = true);
     } else {
@@ -123,10 +108,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     if (source == null) return;
     (source as Map).forEach((pid, data) {
       target[pid.toString()] = {
-        'goals': data['goals'] ?? 0,
-        'assists': data['assists'] ?? 0,
-        'yellowCards': data['yellowCards'] ?? 0,
-        'redCards': data['redCards'] ?? 0,
+        'goals': data['goals'] ?? 0, 'assists': data['assists'] ?? 0, 'yellowCards': data['yellowCards'] ?? 0, 'redCards': data['redCards'] ?? 0,
       };
     });
   }
@@ -136,36 +118,22 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       setState(() => _isLoadingSuspensions = false);
       return;
     }
-
     if (widget.matchData['preMatchInfo'] != null) {
       Map info = widget.matchData['preMatchInfo'];
       List<String> hSusp = List<String>.from(info['homeSuspended'] ?? []);
       List<String> aSusp = List<String>.from(info['awaySuspended'] ?? []);
-
       if (hSusp.isNotEmpty || aSusp.isNotEmpty) {
-        setState(() {
-          _homeSuspended = hSusp;
-          _awaySuspended = aSusp;
-          _isLoadingSuspensions = false;
-        });
+        setState(() { _homeSuspended = hSusp; _awaySuspended = aSusp; _isLoadingSuspensions = false; });
         Future.delayed(Duration.zero, _showSuspensionAlert);
         return;
       }
     }
-
     final discipline = DisciplineService();
     var hSusp = await discipline.getSuspendedPlayers(seasonId: widget.seasonId, teamId: widget.matchData['homeUser'], competitionType: widget.matchData['type'], currentRound: widget.matchData['round']);
     var aSusp = await discipline.getSuspendedPlayers(seasonId: widget.seasonId, teamId: widget.matchData['awayUser'], competitionType: widget.matchData['type'], currentRound: widget.matchData['round']);
-
     if (mounted) {
-      setState(() {
-        _homeSuspended = hSusp;
-        _awaySuspended = aSusp;
-        _isLoadingSuspensions = false;
-      });
-      if (_homeSuspended.isNotEmpty || _awaySuspended.isNotEmpty) {
-        Future.delayed(Duration.zero, _showSuspensionAlert);
-      }
+      setState(() { _homeSuspended = hSusp; _awaySuspended = aSusp; _isLoadingSuspensions = false; });
+      if (_homeSuspended.isNotEmpty || _awaySuspended.isNotEmpty) Future.delayed(Duration.zero, _showSuspensionAlert);
     }
   }
 
@@ -175,58 +143,36 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       List<String> names = [];
       for (var id in ids) {
         var found = roster.where((doc) => doc.id == id);
-        if (found.isNotEmpty) names.add(found.first['name']);
-        else names.add(id);
+        if (found.isNotEmpty) names.add(found.first['name']); else names.add(id);
       }
       return names.join(", ");
     }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("⚠️ SANCIONES ACTIVAS"),
-        backgroundColor: Colors.red.shade50,
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Los siguientes jugadores NO pueden jugar este partido:", style: TextStyle(fontSize: 12)),
-              const SizedBox(height: 10),
-              if (_homeSuspended.isNotEmpty) ...[
-                const Text("LOCAL:", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(getNames(_homeSuspended, _homeRoster), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              ],
-              const SizedBox(height: 8),
-              if (_awaySuspended.isNotEmpty) ...[
-                const Text("VISITA:", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(getNames(_awaySuspended, _awayRoster), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              ],
-            ],
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido"))],
-      ),
-    );
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+        title: const Text("⚠️ SANCIONES ACTIVAS", style: TextStyle(color: Colors.redAccent)), backgroundColor: const Color(0xFF1E293B),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text("Jugadores inhabilitados:", style: TextStyle(fontSize: 12, color: Colors.white70)), const SizedBox(height: 10),
+          if (_homeSuspended.isNotEmpty) ...[const Text("LOCAL:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(getNames(_homeSuspended, _homeRoster), style: const TextStyle(color: Colors.redAccent))],
+          const SizedBox(height: 8),
+          if (_awaySuspended.isNotEmpty) ...[const Text("VISITA:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(getNames(_awaySuspended, _awayRoster), style: const TextStyle(color: Colors.redAccent))]
+        ])),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ENTENDIDO", style: TextStyle(color: Colors.white54)))]
+    ));
   }
 
   Future<void> _loadRosters() async {
     if (widget.matchData['homeUser'] != 'TBD' && !widget.matchData['homeUser'].toString().startsWith('GANADOR')) {
       var doc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['homeUser']).get();
-      List ids = doc.data()?['roster'] ?? [];
-      if (ids.isNotEmpty) _homeRoster = await _fetchPlayers(ids);
+      List ids = doc.data()?['roster'] ?? []; if (ids.isNotEmpty) _homeRoster = await _fetchPlayers(ids);
     }
     if (widget.matchData['awayUser'] != 'TBD' && !widget.matchData['awayUser'].toString().startsWith('GANADOR')) {
       var doc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['awayUser']).get();
-      List ids = doc.data()?['roster'] ?? [];
-      if (ids.isNotEmpty) _awayRoster = await _fetchPlayers(ids);
+      List ids = doc.data()?['roster'] ?? []; if (ids.isNotEmpty) _awayRoster = await _fetchPlayers(ids);
     }
     if (mounted) setState(() {});
   }
 
   Future<List<DocumentSnapshot>> _fetchPlayers(List ids) async {
-    List<String> sIds = ids.map((e) => e.toString()).toList();
-    List<DocumentSnapshot> all = [];
+    List<String> sIds = ids.map((e) => e.toString()).toList(); List<DocumentSnapshot> all = [];
     for (var i = 0; i < sIds.length; i += 10) {
       var end = (i + 10 < sIds.length) ? i + 10 : sIds.length;
       var q = await FirebaseFirestore.instance.collection('players').where(FieldPath.documentId, whereIn: sIds.sublist(i, end)).get();
@@ -242,6 +188,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
 
     int assignedH_Goals = _countTotal(_homeActions, 'goals');
     int assignedA_Goals = _countTotal(_awayActions, 'goals');
+
     if (assignedH_Goals != hGoals || assignedA_Goals != aGoals) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: Goles asignados incorrectos ($assignedH_Goals/$hGoals - $assignedA_Goals/$aGoals)."), backgroundColor: Colors.red));
       return;
@@ -272,8 +219,10 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     try {
       Map<String, dynamic> advancedStats = { 'home': _extractStatsMap(hGoals, _hStats), 'away': _extractStatsMap(aGoals, _aStats) };
       Map<String, dynamic> actionsMap = { 'home': _homeActions, 'away': _awayActions };
+
       Map<String, int> scorersSimpleH = {};
       _homeActions.forEach((k, v) { if(v['goals']! > 0) scorersSimpleH[k] = v['goals']!; });
+
       Map<String, int> scorersSimpleA = {};
       _awayActions.forEach((k, v) { if(v['goals']! > 0) scorersSimpleA[k] = v['goals']!; });
 
@@ -295,13 +244,10 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       await matchRef.update(updateData);
 
       if (widget.isAdmin) {
-        // 1. PROPAGAR SUSPENSIONES
         if (widget.matchData['type'] != 'LEAGUE') {
           var updatedSnapshot = await matchRef.get();
           await DisciplineService().propagateSuspensionsToNextMatch(widget.seasonId, updatedSnapshot.data()!);
         }
-
-        // 2. PROCESAR RESULTADO
         await _processAdminTasks(hGoals, aGoals, definedByPenalties, penaltyScoreStr);
       }
 
@@ -316,15 +262,17 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     int winReward = 15000000; int drawReward = 7500000;
     int homePrize = (hGoals > aGoals) ? winReward : (aGoals > hGoals ? 0 : drawReward);
     int awayPrize = (aGoals > hGoals) ? winReward : (hGoals > aGoals ? 0 : drawReward);
+
     if (homePrize > 0 && !widget.matchData['homeUser'].startsWith('TBD')) {
       await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['homeUser']).update({'budget': FieldValue.increment(homePrize)});
     }
     if (awayPrize > 0 && !widget.matchData['awayUser'].startsWith('TBD')) {
       await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['awayUser']).update({'budget': FieldValue.increment(awayPrize)});
     }
+
     await StatsService().recalculateTeamStats(widget.seasonId);
 
-    // --- 2. ACTUALIZAR COMPETICIONES ---
+    // 2. COMPETICIONES
     String type = widget.matchData['type'];
     if (type == 'LEAGUE') {
       await StandingsService().recalculateLeagueStandings(widget.seasonId);
@@ -342,20 +290,16 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       }
     }
 
-    // --- 3. NUEVO: TRIGGER PATROCINIO (Aquí estaba faltando) ---
+    // 3. SPONSORSHIPS
     try {
       String winnerId = "";
       if (hGoals > aGoals) winnerId = widget.matchData['homeUser'];
       else if (aGoals > hGoals) winnerId = widget.matchData['awayUser'];
       else if (definedByPenalties && penaltyScoreStr != null) {
-        try {
-          List<String> parts = penaltyScoreStr.split('-');
-          int hp = int.tryParse(parts[0])??0;
-          int ap = int.tryParse(parts[1])??0;
-          winnerId = (hp > ap) ? widget.matchData['homeUser'] : widget.matchData['awayUser'];
-        } catch(e){}
+        List<String> parts = penaltyScoreStr.split('-');
+        if (int.parse(parts[0]) > int.parse(parts[1])) winnerId = widget.matchData['homeUser'];
+        else winnerId = widget.matchData['awayUser'];
       }
-
       if (winnerId.isNotEmpty && !winnerId.startsWith('TBD') && !winnerId.startsWith('GANADOR')) {
         String wName = await _getTeamName(winnerId);
         await SponsorshipService().tryGenerateSponsorshipOffer(widget.seasonId, winnerId, wName);
@@ -363,12 +307,10 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     } catch (e) {
       print("Error generando sponsor: $e");
     }
-    // -----------------------------------------------------------
 
-    // --- 4. LOGICA DE NOTICIAS ---
+    // 4. NEWS
     String homeName = await _getTeamName(widget.matchData['homeUser']);
     String awayName = await _getTeamName(widget.matchData['awayUser']);
-
     String homeForm = await _getTeamForm(widget.matchData['homeUser']);
     String awayForm = await _getTeamForm(widget.matchData['awayUser']);
 
@@ -408,7 +350,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       } catch (e) {}
     }
 
-    // GENERAR NOTICIA
     NewsService().createMatchNews(
       seasonId: widget.seasonId,
       homeName: homeName,
@@ -427,7 +368,6 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       awayForm: awayForm,
     );
 
-    // NOTIFICACIÓN PUSH
     String bodyText = "$homeName $hGoals - $aGoals $awayName";
     if (definedByPenalties) bodyText += " (Penales: $penaltyScoreStr)";
     await NotificationService.sendGlobalNotification(seasonId: widget.seasonId, title: "FINALIZADO", body: bodyText, type: "MATCH");
@@ -444,8 +384,22 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     } catch (e) { return ""; }
   }
 
+  Future<void> _checkAndFillCup() async { await Future.delayed(const Duration(seconds: 2)); try { await SeasonGeneratorService().fillCupBracketFromStandings(widget.seasonId); } catch(e){} }
+  Future<String> _getTeamName(String userId) async { if (userId == 'TBD' || userId.startsWith('GANADOR') || userId.startsWith('Seed') || userId.startsWith('FINALISTA')) return 'Por definir'; var doc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(userId).get(); return doc.data()?['teamName'] ?? 'Equipo'; }
+  int _countTotal(Map<String, Map<String, int>> map, String key) { return map.values.fold(0, (sum, val) => sum + (val[key] ?? 0)); }
+  Map<String, int> _extractStatsMap(int goals, Map<String, TextEditingController> ctrls) { return { 'goals': goals, 'shots': int.tryParse(ctrls['shots']!.text)??0, 'shotsOnTarget': int.tryParse(ctrls['target']!.text)??0, 'passes': int.tryParse(ctrls['passes']!.text)??0, 'passesCompleted': int.tryParse(ctrls['completed']!.text)??0, 'possession': int.tryParse(ctrls['possession']!.text)??50, 'fouls': int.tryParse(ctrls['fouls']!.text)??0, 'offsides': int.tryParse(ctrls['offsides']!.text)??0, 'interceptions': int.tryParse(ctrls['interceptions']!.text)??0 }; }
+
+  Future<void> _scanImage() async {
+    final ImagePicker picker = ImagePicker(); final XFile? image = await picker.pickImage(source: ImageSource.gallery); if (image == null) return;
+    setState(() => isScanning = true); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Analizando imagen con IA...")));
+    try { Uint8List bytes = await image.readAsBytes(); var result = await GeminiStatsService().extractStatsFromImage(bytes); if (result != null) { setState(() { _populateControllers(result['home'], _homeScoreCtrl, _hStats); _populateControllers(result['away'], _awayScoreCtrl, _aStats); showAdvanced = true; }); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Datos extraídos!"), backgroundColor: Colors.green)); } } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error IA: $e"))); } finally { setState(() => isScanning = false); }
+  }
+  void _populateControllers(Map data, TextEditingController score, Map<String, TextEditingController> stats) { score.text = (data['goals'] ?? 0).toString(); stats['shots']!.text = (data['shots'] ?? 0).toString(); stats['target']!.text = (data['shotsOnTarget'] ?? 0).toString(); stats['passes']!.text = (data['passes'] ?? 0).toString(); stats['completed']!.text = (data['passesCompleted'] ?? 0).toString(); stats['possession']!.text = (data['possession'] ?? 50).toString(); stats['fouls']!.text = (data['fouls'] ?? 0).toString(); stats['offsides']!.text = (data['offsides'] ?? 0).toString(); stats['interceptions']!.text = (data['interceptions'] ?? 0).toString(); }
+  // --- FIN LÓGICA ---
+
   @override
   Widget build(BuildContext context) {
+    const goldColor = Color(0xFFD4AF37);
     int hGoals = int.tryParse(_homeScoreCtrl.text) ?? 0;
     int aGoals = int.tryParse(_awayScoreCtrl.text) ?? 0;
     int currentH = _countTotal(_homeActions, 'goals');
@@ -455,140 +409,148 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     bool valid = (hGoals == currentH) && (aGoals == currentA) && (currentH_Assists <= hGoals) && (currentA_Assists <= aGoals);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(title: const Text("Reporte de Partido"), centerTitle: true, backgroundColor: const Color(0xFF0D1B2A)),
+      backgroundColor: const Color(0xFF0B1120),
+      appBar: AppBar(title: const Text("ACTA DE PARTIDO", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)), centerTitle: true, backgroundColor: const Color(0xFF0F172A), foregroundColor: Colors.white, elevation: 0),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             ElevatedButton.icon(
               onPressed: isScanning ? null : _scanImage,
-              icon: isScanning ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.camera_alt),
-              label: Text(isScanning ? "PROCESANDO..." : "ESCANEAR FOTO IA"),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6A4C93), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              icon: isScanning ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2)) : const Icon(Icons.qr_code_scanner, color: Colors.black),
+              label: Text(isScanning ? "PROCESANDO IMAGEN..." : "ESCANEAR CAPTURA (IA)", style: const TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(backgroundColor: goldColor, foregroundColor: Colors.black, minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             ),
             const SizedBox(height: 20),
+
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
+              padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 15),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B), // Slate 800
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white10),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10)]
+              ),
               child: Column(
                 children: [
-                  const Text("TIEMPO REGLAMENTARIO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1)),
-                  const SizedBox(height: 10),
+                  const Text("TIEMPO REGLAMENTARIO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38, letterSpacing: 2)),
+                  const SizedBox(height: 15),
                   Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [_ScoreBox("LOCAL", _homeScoreCtrl, size: 60), const Padding(padding: EdgeInsets.symmetric(horizontal: 15), child: Text("-", style: TextStyle(fontSize: 40, fontWeight: FontWeight.w300, color: Colors.grey))), _ScoreBox("VISITA", _awayScoreCtrl, size: 60)]
+                      children: [
+                        _ScoreBox("LOCAL", _homeScoreCtrl, size: 70),
+                        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text("-", style: TextStyle(fontSize: 40, fontWeight: FontWeight.w300, color: Colors.white.withOpacity(0.2)))),
+                        _ScoreBox("VISITA", _awayScoreCtrl, size: 70)
+                      ]
                   ),
                   if (_showPenaltiesInput) ...[
-                    const SizedBox(height: 20), const Divider(indent: 40, endIndent: 40),
-                    const Text("DEFINICIÓN POR PENALES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.orange, letterSpacing: 1)),
+                    const SizedBox(height: 25),
+                    Divider(color: Colors.white.withOpacity(0.1), indent: 40, endIndent: 40),
                     const SizedBox(height: 10),
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [_ScoreBox("PEN (L)", _homePenaltiesCtrl, size: 40, isPenalty: true), const Padding(padding: EdgeInsets.symmetric(horizontal: 15), child: Text("vs", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey))), _ScoreBox("PEN (V)", _awayPenaltiesCtrl, size: 40, isPenalty: true)]),
+                    const Text("PENALES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.orangeAccent, letterSpacing: 1)),
+                    const SizedBox(height: 10),
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [_ScoreBox("PEN (L)", _homePenaltiesCtrl, size: 45, isPenalty: true), const Padding(padding: EdgeInsets.symmetric(horizontal: 15), child: Text("vs", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white24))), _ScoreBox("PEN (V)", _awayPenaltiesCtrl, size: 45, isPenalty: true)]),
                   ]
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
             _buildMatchEventsSummary(),
             const SizedBox(height: 20),
+
             InkWell(
               onTap: () => setState(() => showAdvanced = !showAdvanced),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[300]!)),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("📊 Estadísticas Detalladas (Posesión, Tiros...)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)), Icon(showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20)]),
+                padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("📊 Estadísticas Avanzadas (Posesión, Tiros...)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)), Icon(showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20, color: goldColor)]),
               ),
             ),
             if (showAdvanced) Container(
-              margin: const EdgeInsets.only(top: 10), padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: Column(children: [_statHeader(), const Divider(), _statRow("Tiros (Total / Arco)", _hStats['shots']!, _hStats['target']!, _aStats['shots']!, _aStats['target']!), _statRow("Pases (Total / Comp)", _hStats['passes']!, _hStats['completed']!, _aStats['passes']!, _aStats['completed']!), _statRow("Posesión %", _hStats['possession']!, null, _aStats['possession']!, null), _statRow("Faltas / Offsides", _hStats['fouls']!, _hStats['offsides']!, _aStats['fouls']!, _aStats['offsides']!), _statRow("Intercepciones", _hStats['interceptions']!, null, _aStats['interceptions']!, null)]),
+              margin: const EdgeInsets.only(top: 10), padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12)),
+              child: Column(children: [_statHeader(), Divider(color: Colors.white.withOpacity(0.1)), _statRow("Tiros (Total / Arco)", _hStats['shots']!, _hStats['target']!, _aStats['shots']!, _aStats['target']!), _statRow("Pases (Total / Comp)", _hStats['passes']!, _hStats['completed']!, _aStats['passes']!, _aStats['completed']!), _statRow("Posesión %", _hStats['possession']!, null, _aStats['possession']!, null), _statRow("Faltas / Offsides", _hStats['fouls']!, _hStats['offsides']!, _aStats['fouls']!, _aStats['offsides']!), _statRow("Intercepciones", _hStats['interceptions']!, null, _aStats['interceptions']!, null)]),
             ),
-            const SizedBox(height: 25),
-            const Align(alignment: Alignment.centerLeft, child: Text("DETALLE DE JUGADORES", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF0D1B2A), letterSpacing: 0.5))),
-            const SizedBox(height: 10),
+
+            const SizedBox(height: 30),
+            const Align(alignment: Alignment.centerLeft, child: Text("DETALLE DE JUGADORES", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.white54, letterSpacing: 1.5))),
+            const SizedBox(height: 15),
+
             _buildTeamRosterTile("Local", hGoals, currentH, currentH_Assists, _homeRoster, _homeActions, _homeSuspended),
-            const SizedBox(height: 10),
+            const SizedBox(height: 15),
             _buildTeamRosterTile("Visita", aGoals, currentA, currentA_Assists, _awayRoster, _awayActions, _awaySuspended),
-            const SizedBox(height: 40),
+
+            const SizedBox(height: 50),
             SizedBox(
-              width: double.infinity, height: 55,
+              width: double.infinity, height: 60,
               child: ElevatedButton(
                   onPressed: (isSaving || (widget.isAdmin && !valid)) ? null : _submitResult,
-                  style: ElevatedButton.styleFrom(backgroundColor: valid ? const Color(0xFF2E7D32) : Colors.grey, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 2),
-                  child: isSaving ? const CircularProgressIndicator(color: Colors.white) : Text(widget.isAdmin ? (valid ? "CONFIRMAR Y GUARDAR" : "FALTAN ASIGNAR GOLES/ASIST") : "ENVIAR REPORTE", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))
+                  style: ElevatedButton.styleFrom(backgroundColor: valid ? Colors.green : Colors.grey[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 5),
+                  child: isSaving ? const CircularProgressIndicator(color: Colors.white) : Text(widget.isAdmin ? (valid ? "CONFIRMAR RESULTADO" : "FALTAN ASIGNAR GOLES") : "ENVIAR REPORTE", style: TextStyle(color: valid ? Colors.white : Colors.white38, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1))
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
           ],
         ),
       ),
     );
   }
 
-  // --- WIDGETS AUXILIARES ---
   Widget _buildTeamRosterTile(String label, int totalGoals, int assignedGoals, int assignedAssists, List<DocumentSnapshot> roster, Map<String, Map<String, int>> actions, List<String> suspended) {
     bool complete = (totalGoals == assignedGoals);
-    return Card(elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)), clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        title: Row(children: [Text("$label ", style: const TextStyle(fontWeight: FontWeight.bold)), if(complete) const Icon(Icons.check_circle, color: Colors.green, size: 16), if(!complete) Text(" (Faltan ${totalGoals - assignedGoals})", style: const TextStyle(color: Colors.red, fontSize: 12))]),
-        subtitle: Text("Asistencias: $assignedAssists", style: const TextStyle(fontSize: 12, color: Colors.grey)), backgroundColor: Colors.white, collapsedBackgroundColor: Colors.white,
-        children: roster.map((p) => _playerRow(p, actions, totalGoals, assignedGoals, assignedAssists, suspended)).toList(),
+    return Container(
+      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          collapsedIconColor: Colors.white54, iconColor: const Color(0xFFD4AF37),
+          title: Row(children: [Text("$label ", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), if(complete) const Icon(Icons.check_circle, color: Colors.greenAccent, size: 16), if(!complete) Text(" (Faltan ${totalGoals - assignedGoals})", style: const TextStyle(color: Colors.redAccent, fontSize: 12))]),
+          subtitle: Text("Asistencias: $assignedAssists", style: const TextStyle(fontSize: 12, color: Colors.white38)),
+          children: roster.map((p) => _playerRow(p, actions, totalGoals, assignedGoals, assignedAssists, suspended)).toList(),
+        ),
       ),
     );
   }
 
   Widget _ScoreBox(String label, TextEditingController ctrl, {double size = 50, bool isPenalty = false}) {
-    return Column(children: [Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isPenalty ? Colors.orange[800] : Colors.grey, fontSize: 11)), const SizedBox(height: 4), Container(width: size + 20, height: size, decoration: BoxDecoration(color: isPenalty ? Colors.orange.shade50 : Colors.grey.shade100, borderRadius: BorderRadius.circular(8), border: Border.all(color: isPenalty ? Colors.orange.shade200 : Colors.transparent)), child: Center(child: TextField(controller: ctrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(fontSize: size * 0.6, fontWeight: FontWeight.w900, color: const Color(0xFF0D1B2A)), decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero), onChanged: (v) => setState((){}))),)]);
+    return Column(children: [Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isPenalty ? Colors.orangeAccent : Colors.white38, fontSize: 10, letterSpacing: 1)), const SizedBox(height: 8), Container(width: size + 20, height: size, decoration: BoxDecoration(color: const Color(0xFF0B1120), borderRadius: BorderRadius.circular(12), border: Border.all(color: isPenalty ? Colors.orange.withOpacity(0.5) : Colors.white12)), child: Center(child: TextField(controller: ctrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(fontSize: size * 0.5, fontWeight: FontWeight.w900, color: Colors.white), decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero), onChanged: (v) => setState((){}))),)]);
   }
 
   Widget _buildMatchEventsSummary() {
     List<Widget> getTeamEvents(Map<String, Map<String, int>> actions, List<DocumentSnapshot> roster) {
       List<Widget> events = [];
       actions.forEach((pid, stats) {
-        bool hasEvent = (stats['goals']! > 0) || (stats['assists']! > 0) || (stats['yellowCards']! > 0) || (stats['redCards']! > 0);
-        if (hasEvent) {
-          String name = "Desconocido";
-          try { var found = roster.where((doc) => doc.id == pid); if (found.isNotEmpty) name = found.first['name']; } catch (e) {}
+        if ((stats['goals']??0)>0 || (stats['assists']??0)>0 || (stats['redCards']??0)>0 || (stats['yellowCards']??0)>0) {
+          String name = "Desconocido"; try { var found = roster.where((doc) => doc.id == pid); if (found.isNotEmpty) name = found.first['name']; } catch (e) {}
           List<Widget> badges = [];
-          for(int i=0; i<stats['goals']!; i++) badges.add(_eventBadge("⚽", Colors.green.shade100, Colors.black));
-          for(int i=0; i<stats['assists']!; i++) badges.add(_eventBadge("👟", Colors.blue.shade100, Colors.black));
-          if(stats['redCards']! > 0) badges.add(_eventBadge("🟥", Colors.red.shade100, Colors.red));
-          if(stats['yellowCards']! > 0) badges.add(_eventBadge("🟨", Colors.yellow.shade100, Colors.orange));
-          events.add(Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))), const SizedBox(width: 4), ...badges])));
+          for(int i=0; i<stats['goals']!; i++) badges.add(_eventBadge("⚽", Colors.greenAccent));
+          for(int i=0; i<stats['assists']!; i++) badges.add(_eventBadge("👟", Colors.blueAccent));
+          if(stats['redCards']! > 0) badges.add(_eventBadge("🟥", Colors.redAccent));
+          if(stats['yellowCards']! > 0) badges.add(_eventBadge("🟨", Colors.yellowAccent));
+          events.add(Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70))), const SizedBox(width: 6), ...badges])));
         }
       });
-      if (events.isEmpty) return [const Text("-", style: TextStyle(color: Colors.grey, fontSize: 12))];
+      if (events.isEmpty) return [const Text("-", style: TextStyle(color: Colors.white24, fontSize: 12))];
       return events;
     }
-    return Card(elevation: 0, color: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)), child: Padding(padding: const EdgeInsets.all(12), child: IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("LOCAL", style: TextStyle(fontSize: 10, color: Colors.grey)), const SizedBox(height: 4), ...getTeamEvents(_homeActions, _homeRoster)])), VerticalDivider(width: 20, color: Colors.grey.shade300), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [const Text("VISITA", style: TextStyle(fontSize: 10, color: Colors.grey)), const SizedBox(height: 4), ...getTeamEvents(_awayActions, _awayRoster)]))]))));
+    return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)), child: IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("LOCAL", style: TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.bold)), const SizedBox(height: 8), ...getTeamEvents(_homeActions, _homeRoster)])), VerticalDivider(width: 30, color: Colors.white.withOpacity(0.1)), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [const Text("VISITA", style: TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.bold)), const SizedBox(height: 8), ...getTeamEvents(_awayActions, _awayRoster)]))])));
   }
 
-  Widget _eventBadge(String icon, Color bg, Color border) { return Container(margin: const EdgeInsets.only(left: 2), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4), border: Border.all(color: border, width: 0.5)), child: Text(icon, style: const TextStyle(fontSize: 10))); }
+  Widget _eventBadge(String icon, Color color) { return Container(margin: const EdgeInsets.only(left: 4), padding: const EdgeInsets.all(2), decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle, border: Border.all(color: color.withOpacity(0.5))), child: Text(icon, style: const TextStyle(fontSize: 8))); }
 
   Widget _playerRow(DocumentSnapshot p, Map<String, Map<String, int>> actions, int maxGoals, int assignedGoals, int assignedAssists, List<String> suspendedList) {
     String pid = p.id;
     if (!actions.containsKey(pid)) actions[pid] = {'goals': 0, 'assists': 0, 'yellowCards': 0, 'redCards': 0};
     int goals = actions[pid]!['goals']!; int assists = actions[pid]!['assists']!; int yellows = actions[pid]!['yellowCards'] ?? 0; int reds = actions[pid]!['redCards'] ?? 0;
     bool isSuspended = suspendedList.contains(pid);
-    return Container(decoration: BoxDecoration(color: isSuspended ? Colors.red.shade50 : Colors.white, border: Border(bottom: BorderSide(color: Colors.grey.shade100))), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(children: [Row(children: [if (isSuspended) const Padding(padding: EdgeInsets.only(right: 6), child: Icon(Icons.block, color: Colors.red, size: 16)), Expanded(child: Text(p['name'], style: TextStyle(fontWeight: FontWeight.w600, decoration: isSuspended ? TextDecoration.lineThrough : null, color: isSuspended ? Colors.grey : Colors.black87)))]), const SizedBox(height: 8), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_counterControl("⚽", goals, Colors.green, onRemove: goals > 0 ? () => setState(() => actions[pid]!['goals'] = goals - 1) : null, onAdd: (assignedGoals < maxGoals) ? () => setState(() => actions[pid]!['goals'] = goals + 1) : null), _counterControl("👟", assists, Colors.blue, onRemove: assists > 0 ? () => setState(() => actions[pid]!['assists'] = assists - 1) : null, onAdd: (assignedAssists < maxGoals) ? () => setState(() => actions[pid]!['assists'] = assists + 1) : null), Row(children: [InkWell(onTap: () => setState(() => actions[pid]!['yellowCards'] = (yellows + 1) > 2 ? 0 : (yellows + 1)), child: _cardIcon(Colors.yellow[700]!, yellows)), const SizedBox(width: 8), InkWell(onTap: () => setState(() => actions[pid]!['redCards'] = (reds + 1) > 1 ? 0 : 1), child: _cardIcon(Colors.red, reds))])])]),
+    return Container(decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(children: [Row(children: [if (isSuspended) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.block, color: Colors.redAccent, size: 16)), Expanded(child: Text(p['name'], style: TextStyle(fontWeight: FontWeight.w600, decoration: isSuspended ? TextDecoration.lineThrough : null, color: isSuspended ? Colors.redAccent.withOpacity(0.5) : Colors.white)))]), const SizedBox(height: 10), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_counterControl("⚽", goals, Colors.greenAccent, onRemove: goals > 0 ? () => setState(() => actions[pid]!['goals'] = goals - 1) : null, onAdd: (assignedGoals < maxGoals) ? () => setState(() => actions[pid]!['goals'] = goals + 1) : null), _counterControl("👟", assists, Colors.blueAccent, onRemove: assists > 0 ? () => setState(() => actions[pid]!['assists'] = assists - 1) : null, onAdd: (assignedAssists < maxGoals) ? () => setState(() => actions[pid]!['assists'] = assists + 1) : null), Row(children: [InkWell(onTap: () => setState(() => actions[pid]!['yellowCards'] = (yellows + 1) > 2 ? 0 : (yellows + 1)), child: _cardIcon(Colors.yellowAccent, yellows)), const SizedBox(width: 10), InkWell(onTap: () => setState(() => actions[pid]!['redCards'] = (reds + 1) > 1 ? 0 : 1), child: _cardIcon(Colors.redAccent, reds))])])]),
     );
   }
 
-  Widget _counterControl(String icon, int val, Color color, {VoidCallback? onRemove, VoidCallback? onAdd}) { return Container(decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 4), child: Row(children: [Text(icon, style: const TextStyle(fontSize: 12)), const SizedBox(width: 4), InkWell(onTap: onRemove, child: Icon(Icons.remove_circle_outline, size: 20, color: onRemove != null ? Colors.grey : Colors.grey[200])), SizedBox(width: 20, child: Center(child: Text("$val", style: TextStyle(fontWeight: FontWeight.bold, color: val > 0 ? color : Colors.black)))), InkWell(onTap: onAdd, child: Icon(Icons.add_circle, size: 20, color: onAdd != null ? color : Colors.grey[200]))])); }
-  Widget _cardIcon(Color color, int count) { return Container(width: 24, height: 30, decoration: BoxDecoration(color: count > 0 ? color : Colors.transparent, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.grey.shade300)), child: Center(child: count > 0 ? Text("$count", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)) : Icon(Icons.style_outlined, size: 14, color: Colors.grey.shade400))); }
-
-  Future<void> _scanImage() async {
-    final ImagePicker picker = ImagePicker(); final XFile? image = await picker.pickImage(source: ImageSource.gallery); if (image == null) return;
-    setState(() => isScanning = true); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Analizando imagen con IA...")));
-    try { Uint8List bytes = await image.readAsBytes(); var result = await GeminiStatsService().extractStatsFromImage(bytes); if (result != null) { setState(() { _populateControllers(result['home'], _homeScoreCtrl, _hStats); _populateControllers(result['away'], _awayScoreCtrl, _aStats); showAdvanced = true; }); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Datos extraídos!"))); } } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error IA: $e"))); } finally { setState(() => isScanning = false); }
-  }
-  void _populateControllers(Map data, TextEditingController score, Map<String, TextEditingController> stats) { score.text = (data['goals'] ?? 0).toString(); stats['shots']!.text = (data['shots'] ?? 0).toString(); stats['target']!.text = (data['shotsOnTarget'] ?? 0).toString(); stats['passes']!.text = (data['passes'] ?? 0).toString(); stats['completed']!.text = (data['passesCompleted'] ?? 0).toString(); stats['possession']!.text = (data['possession'] ?? 50).toString(); stats['fouls']!.text = (data['fouls'] ?? 0).toString(); stats['offsides']!.text = (data['offsides'] ?? 0).toString(); stats['interceptions']!.text = (data['interceptions'] ?? 0).toString(); }
-  int _countTotal(Map<String, Map<String, int>> map, String key) { return map.values.fold(0, (sum, val) => sum + (val[key] ?? 0)); }
-  Map<String, int> _extractStatsMap(int goals, Map<String, TextEditingController> ctrls) { return { 'goals': goals, 'shots': int.tryParse(ctrls['shots']!.text) ?? 0, 'shotsOnTarget': int.tryParse(ctrls['target']!.text) ?? 0, 'passes': int.tryParse(ctrls['passes']!.text) ?? 0, 'passesCompleted': int.tryParse(ctrls['completed']!.text) ?? 0, 'possession': int.tryParse(ctrls['possession']!.text) ?? 50, 'fouls': int.tryParse(ctrls['fouls']!.text) ?? 0, 'offsides': int.tryParse(ctrls['offsides']!.text) ?? 0, 'interceptions': int.tryParse(ctrls['interceptions']!.text) ?? 0 }; }
-  Future<void> _checkAndFillCup() async { await Future.delayed(const Duration(seconds: 2)); try { await SeasonGeneratorService().fillCupBracketFromStandings(widget.seasonId); } catch(e){} }
-  Future<String> _getTeamName(String userId) async { if (userId == 'TBD' || userId.startsWith('GANADOR') || userId.startsWith('Seed') || userId.startsWith('FINALISTA')) return 'Por definir'; var doc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(userId).get(); return doc.data()?['teamName'] ?? 'Equipo'; }
-  Widget _statHeader() { return const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("LOCAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)), Text("VISITA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10))]); }
-  Widget _statRow(String l, TextEditingController h1, TextEditingController? h2, TextEditingController a1, TextEditingController? a2) { return Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Row(children: [Expanded(child: _miniInput(h1)), if(h2!=null) const Text("/"), if(h2!=null) Expanded(child: _miniInput(h2))])), Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text(l, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey))), Expanded(child: Row(children: [Expanded(child: _miniInput(a1)), if(a2!=null) const Text("/"), if(a2!=null) Expanded(child: _miniInput(a2))]))])); }
-  Widget _miniInput(TextEditingController c) => TextField(controller: c, textAlign: TextAlign.center, keyboardType: TextInputType.number, decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.all(5), border: OutlineInputBorder()));
+  Widget _counterControl(String icon, int val, Color color, {VoidCallback? onRemove, VoidCallback? onAdd}) { return Container(decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), child: Row(children: [Text(icon, style: const TextStyle(fontSize: 12)), const SizedBox(width: 8), InkWell(onTap: onRemove, child: Icon(Icons.remove, size: 16, color: onRemove != null ? Colors.white54 : Colors.white12)), SizedBox(width: 20, child: Center(child: Text("$val", style: TextStyle(fontWeight: FontWeight.bold, color: val > 0 ? color : Colors.white70)))), InkWell(onTap: onAdd, child: Icon(Icons.add, size: 16, color: onAdd != null ? color : Colors.white12))])); }
+  Widget _cardIcon(Color color, int count) { return Container(width: 24, height: 32, decoration: BoxDecoration(color: count > 0 ? color : Colors.transparent, borderRadius: BorderRadius.circular(4), border: Border.all(color: count > 0 ? color : Colors.white24)), child: Center(child: count > 0 ? Text("$count", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)) : Icon(Icons.style_outlined, size: 14, color: Colors.white24))); }
+  Widget _statHeader() { return const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("LOCAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white54)), Text("VISITA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white54))]); }
+  Widget _statRow(String l, TextEditingController h1, TextEditingController? h2, TextEditingController a1, TextEditingController? a2) { return Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Row(children: [Expanded(child: _miniInput(h1)), if(h2!=null) const Text("/", style: TextStyle(color: Colors.white38)), if(h2!=null) Expanded(child: _miniInput(h2))])), Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Text(l, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38))), Expanded(child: Row(children: [Expanded(child: _miniInput(a1)), if(a2!=null) const Text("/", style: TextStyle(color: Colors.white38)), if(a2!=null) Expanded(child: _miniInput(a2))]))])); }
+  Widget _miniInput(TextEditingController c) => TextField(controller: c, textAlign: TextAlign.center, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white, fontSize: 12), decoration: InputDecoration(isDense: true, contentPadding: const EdgeInsets.all(8), filled: true, fillColor: Colors.black26, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)));
 }

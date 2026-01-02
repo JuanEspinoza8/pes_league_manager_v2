@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:ui';
 import 'auction_room.dart';
 import 'pack_opener.dart';
 import 'my_team_screen.dart';
@@ -18,9 +19,9 @@ class LobbyWaitingRoom extends StatefulWidget {
 }
 
 class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
+  // --- LÓGICA INTACTA ---
   bool isGenerating = false;
 
-  // --- NUEVA LÓGICA DE INICIO: SELECCIÓN DE SUPERCOPA ---
   void _showSupercopaSelectionAndStart(BuildContext context) {
     List<String> selectedIds = [];
 
@@ -31,7 +32,8 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
-              title: const Text("🏆 Supercopa: Elige 4"),
+              backgroundColor: const Color(0xFF1E293B),
+              title: const Text("🏆 Supercopa: Elige 4", style: TextStyle(color: Colors.white)),
               content: SizedBox(
                 width: double.maxFinite,
                 height: 300,
@@ -54,9 +56,11 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                         bool isSelected = selectedIds.contains(id);
 
                         return CheckboxListTile(
-                          title: Text(name),
+                          title: Text(name, style: const TextStyle(color: Colors.white70)),
                           value: isSelected,
-                          activeColor: Colors.amber,
+                          activeColor: const Color(0xFFD4AF37),
+                          checkColor: Colors.black,
+                          side: const BorderSide(color: Colors.white24),
                           onChanged: (bool? val) {
                             setStateDialog(() {
                               if (val == true) {
@@ -73,20 +77,20 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                 ),
               ),
               actions: [
-                Text("Seleccionados: ${selectedIds.length}/4", style: TextStyle(color: selectedIds.length == 4 ? Colors.green : Colors.red)),
+                Text("Seleccionados: ${selectedIds.length}/4", style: TextStyle(color: selectedIds.length == 4 ? Colors.greenAccent : Colors.redAccent)),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("CANCELAR"),
+                  child: const Text("CANCELAR", style: TextStyle(color: Colors.white54)),
                 ),
                 ElevatedButton(
                   onPressed: selectedIds.length == 4
                       ? () {
-                    Navigator.pop(context); // Cerrar diálogo
-                    _handleStartSeason(selectedIds); // Iniciar con los seleccionados
+                    Navigator.pop(context);
+                    _handleStartSeason(selectedIds);
                   }
-                      : null, // Deshabilitado si no son 4
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D1B2A), foregroundColor: Colors.white),
-                  child: const Text("CONFIRMAR E INICIAR"),
+                      : null,
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
+                  child: const Text("CONFIRMAR E INICIAR", style: TextStyle(fontWeight: FontWeight.bold)),
                 )
               ],
             );
@@ -99,7 +103,6 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
   Future<void> _handleStartSeason(List<String> supercopaIds) async {
     setState(() => isGenerating = true);
     try {
-      // Pasamos los IDs seleccionados al generador
       await SeasonGeneratorService().startSeason(widget.seasonId, supercopaIds);
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -111,7 +114,7 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
   void _showDebugMenu() {
     showModalBottomSheet(
         context: context,
-        backgroundColor: const Color(0xFF0D1B2A),
+        backgroundColor: const Color(0xFF0F172A),
         builder: (c) {
           return Container(
             padding: const EdgeInsets.all(20),
@@ -119,7 +122,7 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("HERRAMIENTAS ADMIN", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 18)),
+                const Text("HERRAMIENTAS ADMIN", style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 18)),
                 const SizedBox(height: 20),
                 ListTile(
                   leading: const Icon(Icons.smart_toy, color: Colors.white),
@@ -136,23 +139,27 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
         }
     );
   }
+  // --- FIN LÓGICA ---
 
   @override
   Widget build(BuildContext context) {
     final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+    final goldColor = const Color(0xFFD4AF37);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1B2A), // Fondo oscuro
+      backgroundColor: const Color(0xFF0B1120),
       appBar: AppBar(
-        title: const Text("VESTUARIO", style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.bold)),
+        title: const Text("VESTUARIO", style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.w900, fontSize: 18)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: const TextStyle(color: Colors.white),
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Colors.amber));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
           if (!snapshot.data!.exists) return const Center(child: Text("Temporada no encontrada", style: TextStyle(color: Colors.white)));
 
           final seasonData = snapshot.data!.data() as Map<String, dynamic>;
@@ -171,18 +178,21 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.emoji_events, size: 80, color: Colors.amber),
-                  const SizedBox(height: 20),
-                  const Text("¡LA LIGA HA COMENZADO!", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Icon(Icons.emoji_events, size: 100, color: goldColor),
                   const SizedBox(height: 30),
+                  const Text("¡LA LIGA HA COMENZADO!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2)),
+                  const SizedBox(height: 40),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                        backgroundColor: Colors.amber,
-                        foregroundColor: Colors.black
+                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+                        backgroundColor: goldColor,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        elevation: 10,
+                        shadowColor: goldColor.withOpacity(0.5)
                     ),
                     onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LeagueDashboardScreen(seasonId: widget.seasonId))),
-                    child: const Text("IR AL CAMPO DE JUEGO", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text("IR AL CAMPO DE JUEGO", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                   )
                 ],
               ),
@@ -191,59 +201,85 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
 
           return Column(
             children: [
-              // --- HEADER CÓDIGO ---
+              // --- HEADER TIPO TICKET ---
               Container(
                 margin: const EdgeInsets.all(20),
-                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [Colors.blue[900]!, Colors.blue[800]!]),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0,5))],
-                    border: Border.all(color: Colors.white10)
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.1), blurRadius: 20, offset: const Offset(0,10))],
                 ),
-                child: Column(
-                  children: [
-                    Text("CÓDIGO DE ACCESO", style: TextStyle(color: Colors.blue[100], fontSize: 12, letterSpacing: 1.5)),
-                    const SizedBox(height: 5),
-                    GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: code));
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código copiado al portapapeles")));
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(code, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 8)),
-                          const SizedBox(width: 10),
-                          const Icon(Icons.copy, color: Colors.white54, size: 20),
-                        ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    children: [
+                      // Fondo degradado
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF172554)])
+                        ),
+                        child: Column(
+                          children: [
+                            Text("CÓDIGO DE ACCESO", style: TextStyle(color: Colors.blue[100], fontSize: 12, letterSpacing: 3, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 10),
+                            GestureDetector(
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: code));
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código copiado")));
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.white.withOpacity(0.1))
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(code, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 8)),
+                                    const SizedBox(width: 15),
+                                    const Icon(Icons.copy, color: Colors.white70, size: 24),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _TagBadgeV2(text: status == 'WAITING' ? 'EN ESPERA' : 'DRAFT ACTIVO', color: status == 'WAITING' ? Colors.orange : Colors.greenAccent),
+                                const SizedBox(width: 10),
+                                _TagBadgeV2(text: acquisitionMode == 'AUCTION' ? 'SUBASTA' : 'SOBRES', color: Colors.purpleAccent),
+                              ],
+                            )
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _TagBadge(text: status == 'WAITING' ? 'EN ESPERA' : 'DRAFT ACTIVO', color: status == 'WAITING' ? Colors.orange : Colors.green),
-                        const SizedBox(width: 10),
-                        _TagBadge(text: acquisitionMode == 'AUCTION' ? 'SUBASTA' : 'SOBRES', color: Colors.purple),
-                      ],
-                    )
-                  ],
+                      // Decoración de círculos
+                      Positioned(top: -20, left: -20, child: CircleAvatar(backgroundColor: Colors.white.withOpacity(0.05), radius: 40)),
+                      Positioned(bottom: -20, right: -20, child: CircleAvatar(backgroundColor: Colors.white.withOpacity(0.05), radius: 40)),
+                    ],
+                  ),
                 ),
               ),
 
-              // --- LISTA DE PARTICIPANTES ---
+              // --- CONTADOR Y LISTA ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 25),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("DTs CONECTADOS", style: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.bold, fontSize: 12)),
-                    Text("${participants.length} / $maxPlayers", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    const Text("DTs EN LÍNEA", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.5)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(20)),
+                      child: Text("${participants.length} / $maxPlayers", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
 
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
@@ -252,8 +288,6 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                     if (!participantsSnap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.white10));
 
                     var docs = participantsSnap.data!.docs;
-
-                    // BUSCAR MI USUARIO PARA VERIFICAR SI YA TENGO EQUIPO
                     bool iHaveTeam = false;
                     try {
                       var myDoc = docs.firstWhere((d) => d.id == currentUserId);
@@ -275,110 +309,148 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                               bool isAdminUser = data['uid'] == adminId;
 
                               return Container(
-                                margin: const EdgeInsets.only(bottom: 10),
+                                margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
-                                    color: isMe ? Colors.white.withOpacity(0.1) : Colors.black26,
+                                    color: isMe ? goldColor.withOpacity(0.1) : const Color(0xFF1E293B), // Fondo distinto si soy yo
                                     borderRadius: BorderRadius.circular(12),
-                                    border: isMe ? Border.all(color: Colors.amber.withOpacity(0.3)) : null
+                                    border: isMe ? Border.all(color: goldColor.withOpacity(0.5)) : Border.all(color: Colors.transparent)
                                 ),
                                 child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                                   leading: CircleAvatar(
-                                    backgroundColor: isBot ? Colors.grey[700] : (isAdminUser ? Colors.amber : Colors.blue),
-                                    child: Icon(isBot ? Icons.smart_toy : (isAdminUser ? Icons.star : Icons.person), color: Colors.white, size: 20),
+                                    radius: 18,
+                                    backgroundColor: isBot ? Colors.grey[800] : (isAdminUser ? goldColor : Colors.blueAccent),
+                                    child: Icon(
+                                        isBot ? Icons.smart_toy : (isAdminUser ? Icons.star : Icons.person),
+                                        color: isBot ? Colors.white54 : (isAdminUser ? Colors.black : Colors.white),
+                                        size: 18
+                                    ),
                                   ),
-                                  title: Text(data['teamName'], style: TextStyle(color: Colors.white, fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
+                                  title: Text(
+                                      data['teamName'],
+                                      style: TextStyle(
+                                          color: isMe ? goldColor : Colors.white,
+                                          fontWeight: isMe ? FontWeight.w900 : FontWeight.normal
+                                      )
+                                  ),
                                   trailing: isFull
-                                      ? const Icon(Icons.check_circle, color: Colors.greenAccent)
-                                      : const Icon(Icons.timelapse, color: Colors.grey),
+                                      ? const Icon(Icons.check_circle, color: Colors.greenAccent, size: 20)
+                                      : const Icon(Icons.hourglass_empty, color: Colors.white24, size: 20),
                                 ),
                               );
                             },
                           ),
                         ),
 
-                        // --- ÁREA DE ACCIONES (PANEL INFERIOR BLANCO) ---
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: const BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(30))
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 1. SI ESTÁ EN ESPERA (Solo Admin inicia)
-                              if (status == 'WAITING') ...[
-                                if (isAdmin)
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 50,
-                                    child: ElevatedButton(
-                                      onPressed: () => FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).update({'status': 'DRAFT_PHASE'}),
-                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D1B2A), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                      child: const Text("INICIAR FASE DE DRAFT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                    ),
-                                  )
-                                else
-                                  const Text("Esperando que el administrador inicie el draft...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                        // --- ÁREA DE ACCIONES (GLASS PANEL) ---
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  border: const Border(top: BorderSide(color: Colors.white12))
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // 1. ESTADO: ESPERA
+                                  if (status == 'WAITING') ...[
+                                    if (isAdmin)
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 55,
+                                        child: ElevatedButton(
+                                          onPressed: () => FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).update({'status': 'DRAFT_PHASE'}),
+                                          style: ElevatedButton.styleFrom(
+                                              backgroundColor: goldColor,
+                                              foregroundColor: Colors.black,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                              elevation: 5
+                                          ),
+                                          child: const Text("INICIAR FASE DE DRAFT", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                                        ),
+                                      )
+                                    else
+                                      Column(
+                                        children: const [
+                                          CircularProgressIndicator(color: Colors.white24),
+                                          SizedBox(height: 15),
+                                          Text("El administrador iniciará el draft pronto...", style: TextStyle(color: Colors.white54, fontStyle: FontStyle.italic)),
+                                        ],
+                                      ),
 
-                                if (isAdmin) ...[
-                                  const SizedBox(height: 10),
-                                  TextButton.icon(onPressed: _showDebugMenu, icon: const Icon(Icons.settings), label: const Text("Opciones de Admin"))
-                                ]
-                              ],
+                                    if (isAdmin) ...[
+                                      const SizedBox(height: 10),
+                                      TextButton.icon(
+                                          onPressed: _showDebugMenu,
+                                          icon: const Icon(Icons.settings, color: Colors.white24),
+                                          label: const Text("Opciones de Admin", style: TextStyle(color: Colors.white24))
+                                      )
+                                    ]
+                                  ],
 
-                              // 2. FASE DE DRAFT (Acciones de usuario)
-                              if (status == 'DRAFT_PHASE' || status == 'AUCTION') ...[
-                                if (acquisitionMode == 'AUCTION')
-                                // --- CORRECCIÓN: SOLO BOTÓN DE SUBASTA ---
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: _ActionButton(
-                                        text: "ENTRAR A LA SUBASTA",
-                                        icon: Icons.gavel,
-                                        color: Colors.amber[800]!,
-                                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AuctionRoom(seasonId: widget.seasonId, isAdmin: isAdmin)))
-                                    ),
-                                  )
-                                else
-                                // Modo Sobres (Mantenemos igual)
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: _ActionButton(
-                                        text: iHaveTeam ? "SOBRE YA ABIERTO" : "ABRIR SOBRE INICIAL",
-                                        icon: iHaveTeam ? Icons.check : Icons.flash_on,
-                                        color: iHaveTeam ? Colors.grey : Colors.blue[800]!,
-                                        onTap: iHaveTeam ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PackOpener(seasonId: widget.seasonId)))
-                                    ),
-                                  ),
+                                  // 2. ESTADO: DRAFT
+                                  if (status == 'DRAFT_PHASE' || status == 'AUCTION') ...[
+                                    if (acquisitionMode == 'AUCTION')
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: _ActionButtonV2(
+                                            text: "ENTRAR A LA SUBASTA",
+                                            icon: Icons.gavel_rounded,
+                                            color: goldColor,
+                                            textColor: Colors.black,
+                                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AuctionRoom(seasonId: widget.seasonId, isAdmin: isAdmin)))
+                                        ),
+                                      )
+                                    else
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: _ActionButtonV2(
+                                            text: iHaveTeam ? "SOBRE ABIERTO" : "ABRIR SOBRE INICIAL",
+                                            icon: iHaveTeam ? Icons.check_circle_outline : Icons.flash_on,
+                                            color: iHaveTeam ? Colors.white10 : Colors.purpleAccent,
+                                            textColor: iHaveTeam ? Colors.white38 : Colors.white,
+                                            onTap: iHaveTeam ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => PackOpener(seasonId: widget.seasonId)))
+                                        ),
+                                      ),
 
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton(
-                                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(seasonId: widget.seasonId, userId: currentUserId))),
-                                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15), side: const BorderSide(color: Color(0xFF0D1B2A))),
-                                    child: const Text("VER MI PLANTILLA", style: TextStyle(color: Color(0xFF0D1B2A), fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-
-                                // 3. ADMIN: INICIAR LIGA
-                                if (isAdmin) ...[
-                                  const SizedBox(height: 15),
-                                  const Divider(),
-                                  isGenerating
-                                      ? const CircularProgressIndicator()
-                                      : SizedBox(
-                                    width: double.infinity,
-                                    child: TextButton.icon(
-                                      icon: const Icon(Icons.play_circle_fill, color: Colors.green),
-                                      label: const Text("FINALIZAR DRAFT E INICIAR LIGA", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                      onPressed: () => _showSupercopaSelectionAndStart(context),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MyTeamScreen(seasonId: widget.seasonId, userId: currentUserId))),
+                                        icon: const Icon(Icons.shield_outlined),
+                                        label: const Text("VER PLANTILLA", style: TextStyle(fontWeight: FontWeight.bold)),
+                                        style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 18),
+                                            side: const BorderSide(color: Colors.white24),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                                        ),
+                                      ),
                                     ),
-                                  )
-                                ]
-                              ]
-                            ],
+
+                                    if (isAdmin) ...[
+                                      const SizedBox(height: 20),
+                                      const Divider(color: Colors.white10),
+                                      isGenerating
+                                          ? const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(color: Colors.greenAccent))
+                                          : SizedBox(
+                                        width: double.infinity,
+                                        child: TextButton.icon(
+                                          icon: const Icon(Icons.play_circle_fill, color: Colors.greenAccent),
+                                          label: const Text("FINALIZAR DRAFT E INICIAR LIGA", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                                          onPressed: () => _showSupercopaSelectionAndStart(context),
+                                        ),
+                                      )
+                                    ]
+                                  ]
+                                ],
+                              ),
+                            ),
                           ),
                         )
                       ],
@@ -394,26 +466,32 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
   }
 }
 
-class _TagBadge extends StatelessWidget {
+// Widgets Auxiliares Re-estilizados
+class _TagBadgeV2 extends StatelessWidget {
   final String text;
   final Color color;
-  const _TagBadge({required this.text, required this.color});
+  const _TagBadgeV2({required this.text, required this.color});
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
-      child: Text(text, style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3))
+      ),
+      child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionButtonV2 extends StatelessWidget {
   final String text;
   final IconData icon;
   final Color color;
+  final Color textColor;
   final VoidCallback? onTap;
-  const _ActionButton({required this.text, required this.icon, required this.color, this.onTap});
+  const _ActionButtonV2({required this.text, required this.icon, required this.color, required this.textColor, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -421,18 +499,19 @@ class _ActionButton extends StatelessWidget {
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        disabledBackgroundColor: Colors.grey[300],
-        disabledForegroundColor: Colors.grey[600],
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: onTap == null ? 0 : 4,
+        disabledBackgroundColor: Colors.white10,
+        disabledForegroundColor: Colors.white38,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: onTap == null ? 0 : 8,
+        shadowColor: color.withOpacity(0.4),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          Icon(icon, size: 22, color: textColor),
+          const SizedBox(width: 10),
+          Text(text, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: textColor, letterSpacing: 0.5)),
         ],
       ),
     );

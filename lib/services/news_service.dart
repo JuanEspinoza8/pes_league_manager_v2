@@ -7,11 +7,11 @@ import 'package:http/http.dart' as http;
 
 class NewsService {
   // ⚠️ TUS API KEYS
-  static const String _geminiApiKey = 'API KEY';
-  static const String _pollinationsApiKey = 'API KEY';
+  static const String _geminiApiKey = 'APY KEY';
+  static const String _pollinationsApiKey = 'APY KEY';
 
-  final String _cloudName = 'API KEY';
-  final String _uploadPreset = 'API KEY';
+  final String _cloudName = 'APY KEY';
+  final String _uploadPreset = 'APY KEY';
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final String _fallbackImage = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?q=80&w=1080&auto=format&fit=crop";
 

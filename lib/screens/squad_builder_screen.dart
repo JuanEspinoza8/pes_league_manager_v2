@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'dart:ui'; // Para efectos visuales
 
 class SquadBuilderScreen extends StatefulWidget {
   final String seasonId;
@@ -19,9 +20,9 @@ class SquadBuilderScreen extends StatefulWidget {
 }
 
 class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
+  // --- LÓGICA INTACTA ---
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-  // --- FORMACIONES ---
   final Map<String, Map<String, Offset>> formations = {
     '4-3-3': {
       'GK': const Offset(0.50, 0.88),
@@ -58,7 +59,7 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
   };
 
   String currentFormation = '4-3-3';
-  Map<String, String?> lineup = {}; // { 'GK': 'player_id', ... }
+  Map<String, String?> lineup = {};
 
   List<DocumentSnapshot> myFullRoster = [];
   bool isLoading = true;
@@ -66,7 +67,6 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
   @override
   void initState() {
     super.initState();
-    // Inicializar lineup vacío
     _resetLineupSlots('4-3-3');
     _loadSquadData();
   }
@@ -74,7 +74,6 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
   void _resetLineupSlots(String formationName) {
     var slots = formations[formationName]!.keys.toList();
     Map<String, String?> newLineup = {};
-    // Mantener jugadores si la posición existe en la nueva formación
     for (var slot in slots) {
       newLineup[slot] = lineup[slot];
     }
@@ -139,13 +138,12 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
         'selectedFormation': currentFormation
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Táctica Guardada")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Táctica Guardada"), backgroundColor: Color(0xFFD4AF37)));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 
-  // --- LÓGICA DE OFERTAS ---
   Future<void> _checkMarketAndShowOffer(String targetPlayerId, Map<String, dynamic> targetData) async {
     DocumentSnapshot seasonDoc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).get();
     bool isMarketOpen = seasonDoc['marketOpen'] ?? true;
@@ -181,47 +179,51 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
               }
 
               return AlertDialog(
-                backgroundColor: const Color(0xFF1B263B), // Fondo oscuro
-                title: const Text("OFERTA DE TRASPASO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                backgroundColor: const Color(0xFF1E293B), // Slate 800
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withOpacity(0.1))),
+                title: const Text("OFERTA DE TRASPASO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       ListTile(
-                        leading: _buildPlayerCircle(targetData, 45),
+                        contentPadding: EdgeInsets.zero,
+                        leading: _buildPlayerCircle(targetData, 50),
                         title: Text(targetData['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         subtitle: Text("Media: ${targetData['rating']}", style: const TextStyle(color: Colors.white70)),
                       ),
-                      const Divider(color: Colors.white24),
+                      const Divider(color: Colors.white24, height: 30),
                       TextField(
                         controller: moneyController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                         decoration: InputDecoration(
                             labelText: "Oferta en Dinero",
                             prefixText: "\$ ",
                             filled: true,
-                            fillColor: Colors.black26,
-                            labelStyle: const TextStyle(color: Colors.white70),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))
+                            fillColor: const Color(0xFF0F172A),
+                            labelStyle: const TextStyle(color: Colors.white54),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            prefixStyle: const TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 18)
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text("O intercambiar por:", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                      const SizedBox(height: 5),
+                      const Text("O intercambiar por:", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
 
                       if (loadingMyPlayers)
-                        const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(color: Colors.white))
+                        const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(color: Color(0xFFD4AF37)))
                       else
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12)),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
-                              dropdownColor: const Color(0xFF1B263B),
+                              dropdownColor: const Color(0xFF0F172A),
                               hint: const Text("Seleccionar jugador...", style: TextStyle(color: Colors.white54)),
                               value: selectedSwapPlayer?['id'],
+                              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFD4AF37)),
                               onChanged: (val) {
                                 if (val != null) {
                                   var pDoc = myOwnPlayers.firstWhere((doc) => doc.id == val);
@@ -247,7 +249,7 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                   ),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.white54))),
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR", style: TextStyle(color: Colors.white54))),
                   ElevatedButton(
                       onPressed: () async {
                         int offerAmount = int.tryParse(moneyController.text) ?? 0;
@@ -270,10 +272,10 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                         });
 
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Oferta enviada!")));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Oferta enviada!"), backgroundColor: Colors.green));
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                      child: const Text("ENVIAR OFERTA", style: TextStyle(color: Colors.white))
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
+                      child: const Text("ENVIAR OFERTA", style: TextStyle(fontWeight: FontWeight.bold))
                   )
                 ],
               );
@@ -303,48 +305,72 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
     allDocs.sort((a,b) => (b['rating']??0).compareTo(a['rating']??0));
     return allDocs;
   }
+  // --- FIN LÓGICA ---
 
   @override
   Widget build(BuildContext context) {
+    const goldColor = Color(0xFFD4AF37);
+
     return Scaffold(
+      backgroundColor: const Color(0xFF0B1120),
       appBar: AppBar(
-        title: Text(widget.isReadOnly ? "PIZARRA RIVAL" : "MI TÁCTICA", style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-        backgroundColor: const Color(0xFF0D1B2A), // Azul Noche
+        title: Text(widget.isReadOnly ? "PIZARRA RIVAL" : "MI ESTRATEGIA", style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 18)),
+        backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         centerTitle: true,
+        elevation: 0,
         actions: [
           if (!widget.isReadOnly)
-            IconButton(icon: const Icon(Icons.save), onPressed: _saveSquad)
+            IconButton(icon: const Icon(Icons.save_rounded, color: goldColor), onPressed: _saveSquad, tooltip: "Guardar Táctica")
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: goldColor))
           : Column(
         children: [
-          // HEADER FORMACIÓN
+          // HEADER FORMACIÓN (Selector Estilizado)
           Container(
-            color: const Color(0xFF1B263B),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("ESQUEMA TÁCTICO", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+                const Row(
+                  children: [
+                    Icon(Icons.grid_view_rounded, color: Colors.white54, size: 18),
+                    SizedBox(width: 8),
+                    Text("ESQUEMA TÁCTICO", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  ],
+                ),
                 if (!widget.isReadOnly)
-                  DropdownButton<String>(
-                    value: currentFormation,
-                    dropdownColor: const Color(0xFF1B263B),
-                    style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
-                    underline: Container(),
-                    icon: const Icon(Icons.arrow_drop_down, color: Colors.amber),
-                    items: formations.keys.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          currentFormation = val;
-                          _resetLineupSlots(val);
-                        });
-                      }
-                    },
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: goldColor.withOpacity(0.3))
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: currentFormation,
+                        dropdownColor: const Color(0xFF1E293B),
+                        style: const TextStyle(color: goldColor, fontWeight: FontWeight.bold, fontSize: 14),
+                        icon: const Icon(Icons.arrow_drop_down, color: goldColor),
+                        items: formations.keys.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              currentFormation = val;
+                              _resetLineupSlots(val);
+                            });
+                          }
+                        },
+                      ),
+                    ),
                   )
                 else
                   Text(currentFormation, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))
@@ -354,10 +380,12 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
 
           if (widget.isReadOnly)
             Container(
-                color: Colors.amber,
                 width: double.infinity,
-                padding: const EdgeInsets.all(5),
-                child: const Text("TOCA UN JUGADOR PARA OFERTAR", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black))
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [goldColor.withOpacity(0.8), goldColor])
+                ),
+                child: const Text("TOCA UN JUGADOR PARA OFERTAR", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.black, letterSpacing: 1))
             ),
 
           // --- CANCHA (PITCH) ---
@@ -369,17 +397,24 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
 
                   return Container(
                     width: double.infinity,
-                    decoration: const BoxDecoration(
-                        color: Color(0xFF2E7D32),
-                        image: DecorationImage(
+                    margin: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF2E7D32), // Verde césped base
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15, spreadRadius: 2, offset: const Offset(0, 5))
+                        ],
+                        image: const DecorationImage(
                             image: NetworkImage("https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Soccer_Field_Transparant.svg/800px-Soccer_Field_Transparant.svg.png"),
                             fit: BoxFit.contain,
-                            opacity: 0.6 // Un poco más visible
-                        )
+                            opacity: 0.8
+                        ),
+                        border: Border.all(color: Colors.white10, width: 4)
                     ),
                     child: Stack(
                       children: slots.keys.map((posKey) {
                         Offset relativePos = slots[posKey]!;
+                        // Ajustamos ligeramente las posiciones para que centren bien en el contenedor
                         return Positioned(
                           left: relativePos.dx * constraints.maxWidth - 27.5,
                           top: relativePos.dy * constraints.maxHeight - 27.5,
@@ -392,51 +427,61 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
             ),
           ),
 
-          // --- BANCA ---
-          Container(
-              color: const Color(0xFF0D1B2A),
-              padding: const EdgeInsets.all(8),
-              width: double.infinity,
-              child: const Text("BANQUILLO", style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold))
-          ),
-          Expanded(
-            flex: 1,
-            child: Container(
-              color: const Color(0xFF101010), // Fondo negro suave
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.all(8),
-                itemCount: myFullRoster.length,
-                itemBuilder: (context, index) {
-                  final player = myFullRoster[index];
-                  bool isUsed = lineup.containsValue(player.id);
+          // --- BANCA (GLASS PANEL) ---
+          ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                color: Colors.white.withOpacity(0.05),
+                child: Column(
+                  children: [
+                    Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        width: double.infinity,
+                        color: Colors.black26,
+                        child: const Text("BANQUILLO DE SUPLENTES", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5))
+                    ),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.all(12),
+                        itemCount: myFullRoster.length,
+                        itemBuilder: (context, index) {
+                          final player = myFullRoster[index];
+                          bool isUsed = lineup.containsValue(player.id);
 
-                  if (isUsed && !widget.isReadOnly) return const SizedBox();
+                          if (isUsed && !widget.isReadOnly) return const SizedBox();
 
-                  final data = player.data() as Map<String, dynamic>;
-                  return GestureDetector(
-                    onTap: () {
-                      if (widget.isReadOnly) {
-                        _checkMarketAndShowOffer(player.id, data);
-                        return;
-                      }
-                    },
-                    child: Opacity(
-                      opacity: isUsed ? 0.3 : 1.0,
-                      child: Container(
-                        width: 70, margin: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Column(
-                          children: [
-                            _buildPlayerCircle(data, 50),
-                            const SizedBox(height: 4),
-                            Text(data['name'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10)),
-                            Text(data['position'], style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                          ],
-                        ),
+                          final data = player.data() as Map<String, dynamic>;
+                          return GestureDetector(
+                            onTap: () {
+                              if (widget.isReadOnly) {
+                                _checkMarketAndShowOffer(player.id, data);
+                                return;
+                              }
+                            },
+                            child: Opacity(
+                              opacity: isUsed ? 0.3 : 1.0,
+                              child: Container(
+                                width: 70,
+                                margin: const EdgeInsets.only(right: 8),
+                                child: Column(
+                                  children: [
+                                    _buildPlayerCircle(data, 45),
+                                    const SizedBox(height: 6),
+                                    Text(data['name'], maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    Text(data['position'], style: const TextStyle(color: Colors.white54, fontSize: 9)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
             ),
           )
@@ -467,34 +512,39 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
       },
       child: Column(
         children: [
-          // Ficha de jugador
+          // Ficha de jugador (Círculo)
           Container(
             width: 55, height: 55,
             decoration: _getSlotDecoration(pData),
             child: (pData != null && pData['photoUrl'] != null && pData['photoUrl'] != "")
                 ? ClipOval(child: Image.network(pData['photoUrl'], fit: BoxFit.cover))
-                : Center(child: Text(pData != null ? "${pData['rating']}" : "", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))),
+                : Center(child: Text(pData != null ? "${pData['rating']}" : "", style: TextStyle(color: _getTextColorForRating(pData), fontWeight: FontWeight.w900, fontSize: 16))),
           ),
 
           // Etiqueta de Nombre
           if (pData != null)
             Container(
-              margin: const EdgeInsets.only(top: 2),
+              margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white24, width: 0.5)),
+              decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.white24, width: 0.5),
+                  boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 4)]
+              ),
               child: Text(
                 pData['name'].split(' ').last.toUpperCase(),
-                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
                 overflow: TextOverflow.ellipsis,
               ),
             )
           else
           // Etiqueta de Posición vacía
             Container(
-              margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
-              child: Text(posKey, style: const TextStyle(color: Colors.white, fontSize: 8)),
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(4)),
+              child: Text(posKey, style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
             )
         ],
       ),
@@ -504,39 +554,55 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
   void _showPlayerSelector(String posKey) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0D1B2A), // Fondo oscuro
+      backgroundColor: const Color(0xFF0F172A),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true, // Para mejor altura
       builder: (context) {
         var available = myFullRoster.where((doc) => !lineup.containsValue(doc.id)).toList();
-        return Column(
-          children: [
-            const Padding(padding: EdgeInsets.all(15), child: Text("SELECCIONAR JUGADOR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1))),
-            ListTile(
-              leading: const CircleAvatar(backgroundColor: Colors.red, child: Icon(Icons.close, color: Colors.white)),
-              title: const Text("Quitar Jugador", style: TextStyle(color: Colors.redAccent)),
-              onTap: () {
-                setState(() => lineup[posKey] = null);
-                Navigator.pop(context);
-              },
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: available.length,
-                itemBuilder: (context, index) {
-                  var p = available[index].data() as Map<String, dynamic>;
-                  return ListTile(
-                    leading: _buildPlayerCircle(p, 40),
-                    title: Text(p['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    subtitle: Text("${p['position']} - Media: ${p['rating']}", style: const TextStyle(color: Colors.grey)),
+        return DraggableScrollableSheet(
+            initialChildSize: 0.5,
+            minChildSize: 0.3,
+            maxChildSize: 0.8,
+            expand: false,
+            builder: (context, scrollController) {
+              return Column(
+                children: [
+                  Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
+                  const Padding(padding: EdgeInsets.all(20), child: Text("SELECCIONAR JUGADOR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2))),
+                  ListTile(
+                    leading: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 16)),
+                    title: const Text("QUITAR JUGADOR", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                     onTap: () {
-                      setState(() => lineup[posKey] = available[index].id);
+                      setState(() => lineup[posKey] = null);
                       Navigator.pop(context);
                     },
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                  const Divider(color: Colors.white10),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: available.length,
+                      itemBuilder: (context, index) {
+                        var p = available[index].data() as Map<String, dynamic>;
+                        return Container(
+                          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white12))),
+                          child: ListTile(
+                            leading: _buildPlayerCircle(p, 45),
+                            title: Text(p['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            subtitle: Text("${p['position']} • Media: ${p['rating']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                            trailing: const Icon(Icons.add_circle_outline, color: Color(0xFFD4AF37)),
+                            onTap: () {
+                              setState(() => lineup[posKey] = available[index].id);
+                              Navigator.pop(context);
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            }
         );
       },
     );
@@ -546,37 +612,65 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
     return Container(
       width: size, height: size,
       decoration: _getSlotDecoration(data),
-      child: Center(child: Text(data['photoUrl'] == "" ? "${data['rating']}" : "", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+      child: Center(child: Text(data['photoUrl'] == "" ? "${data['rating']}" : "", style: TextStyle(color: _getTextColorForRating(data), fontWeight: FontWeight.w900, fontSize: size * 0.4))),
     );
   }
 
+  Color _getTextColorForRating(Map<String, dynamic>? player) {
+    if (player == null) return Colors.white;
+    int rating = player['rating'] ?? 75;
+    if (rating >= 85) return Colors.black; // Gold & Black balls text should be black or dark
+    return Colors.white;
+  }
+
   BoxDecoration _getSlotDecoration(Map<String, dynamic>? player) {
-    if (player == null) return BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: Colors.white24, style: BorderStyle.solid));
+    if (player == null) return BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle, border: Border.all(color: Colors.white12, width: 2, style: BorderStyle.solid));
 
     int rating = player['rating'] ?? 75;
     String tier = player['tier'] ?? '';
 
-    // Bordes más elaborados
+    // LEYENDA (Gradiente Místico)
     if (tier == 'LEYENDA') {
       return BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const LinearGradient(colors: [Colors.red, Colors.purple, Colors.orange], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          gradient: const LinearGradient(colors: [Color(0xFFB8860B), Color(0xFFFFD700), Color(0xFFDAA520)], begin: Alignment.topLeft, end: Alignment.bottomRight),
           border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.5), blurRadius: 10)]
+          boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.6), blurRadius: 10)]
       );
     }
+    // PRIME (Negro y Neón)
     if (tier == 'PRIME') {
       return BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.black,
           border: Border.all(color: Colors.cyanAccent, width: 2),
-          boxShadow: [BoxShadow(color: Colors.cyan.withOpacity(0.3), blurRadius: 8)]
+          boxShadow: [BoxShadow(color: Colors.cyanAccent.withOpacity(0.5), blurRadius: 8)]
       );
     }
 
-    Color c = rating >= 90 ? Colors.black : (rating >= 85 ? const Color(0xFFD4AF37) : (rating >= 80 ? const Color(0xFFC0C0C0) : const Color(0xFFCD7F32))); // Oro, Plata, Bronce
-    Color borderC = rating >= 85 ? Colors.amberAccent : Colors.white54;
+    // Colores base estilo PES clásico
+    Color bgColor;
+    Color borderColor;
 
-    return BoxDecoration(shape: BoxShape.circle, color: c, border: Border.all(color: borderC, width: 2), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0,2))]);
+    if (rating >= 90) { // Black Ball
+      bgColor = const Color(0xFF101010);
+      borderColor = Colors.grey;
+    } else if (rating >= 85) { // Gold Ball
+      bgColor = const Color(0xFFD4AF37);
+      borderColor = const Color(0xFFF7E7CE);
+    } else if (rating >= 80) { // Silver Ball
+      bgColor = const Color(0xFFC0C0C0);
+      borderColor = Colors.white70;
+    } else { // Bronze Ball
+      bgColor = const Color(0xFFCD7F32);
+      borderColor = const Color(0xFF8B4513);
+    }
+
+    return BoxDecoration(
+        shape: BoxShape.circle,
+        color: bgColor,
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 4, offset: const Offset(0,2))]
+    );
   }
 }

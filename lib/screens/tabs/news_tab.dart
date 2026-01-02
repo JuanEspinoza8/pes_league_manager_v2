@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Asegurate de tener intl o formatea la fecha simple
 
 class NewsTab extends StatelessWidget {
   final String seasonId;
@@ -9,9 +8,9 @@ class NewsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      body: StreamBuilder<QuerySnapshot>(
+    return Container(
+      color: const Color(0xFF0B1120), // Fondo Negro Profundo
+      child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('seasons')
             .doc(seasonId)
@@ -19,15 +18,15 @@ class NewsTab extends StatelessWidget {
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
           if (snapshot.data!.docs.isEmpty) {
-            return Center(
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.newspaper, size: 60, color: Colors.grey[300]),
-                  const SizedBox(height: 10),
-                  const Text("El diario está vacío...", style: TextStyle(color: Colors.grey)),
+                  Icon(Icons.newspaper, size: 60, color: Colors.white10),
+                  SizedBox(height: 10),
+                  Text("El diario está vacío...", style: TextStyle(color: Colors.white24)),
                 ],
               ),
             );
@@ -58,69 +57,69 @@ class _NewsCard extends StatelessWidget {
     bool isLiked = likes.contains(currentUserId);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 20),
+      color: const Color(0xFF1E293B), // Slate 800 (Card BG)
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (Logo del Diario o Liga)
+          // Header
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.red),
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFD4AF37), width: 1)),
                   child: const CircleAvatar(
                     radius: 16,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.sports_soccer, size: 20, color: Colors.black),
+                    backgroundColor: Colors.black,
+                    child: Icon(Icons.sports_soccer, size: 18, color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("PES LEAGUE NEWS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text(_formatDate(data['timestamp']), style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                    const Text("PES LEAGUE NEWS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white, letterSpacing: 0.5)),
+                    Text(_formatDate(data['timestamp']), style: const TextStyle(color: Colors.white38, fontSize: 11)),
                   ],
                 ),
                 const Spacer(),
-                const Icon(Icons.more_horiz),
+                const Icon(Icons.more_horiz, color: Colors.white54),
               ],
             ),
           ),
 
-          // Imagen (Cuadrada 1:1 o 4:5)
+          // Imagen
           GestureDetector(
             onDoubleTap: () => _toggleLike(doc.reference, currentUserId, likes),
             child: AspectRatio(
-              aspectRatio: 4 / 4,
+              aspectRatio: 1, // 1:1 Cuadrado
               child: Image.network(
                 data['imageUrl'] ?? '',
                 fit: BoxFit.cover,
                 loadingBuilder: (c, child, progress) {
                   if (progress == null) return child;
-                  return Container(color: Colors.grey[200], child: const Center(child: CircularProgressIndicator()));
+                  return Container(color: Colors.black12, child: const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))));
                 },
-                errorBuilder: (c, e, s) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)),
+                errorBuilder: (c, e, s) => Container(color: Colors.black12, child: const Icon(Icons.broken_image, color: Colors.white24)),
               ),
             ),
           ),
 
           // Actions
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
                 GestureDetector(
                   onTap: () => _toggleLike(doc.reference, currentUserId, likes),
-                  child: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.black, size: 28),
+                  child: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.redAccent : Colors.white, size: 28),
                 ),
-                const SizedBox(width: 15),
-                const Icon(Icons.mode_comment_outlined, size: 26),
-                const SizedBox(width: 15),
-                const Icon(Icons.send_outlined, size: 26),
+                const SizedBox(width: 20),
+                const Icon(Icons.mode_comment_outlined, size: 26, color: Colors.white),
+                const SizedBox(width: 20),
+                const Icon(Icons.send_outlined, size: 26, color: Colors.white),
               ],
             ),
           ),
@@ -129,18 +128,18 @@ class _NewsCard extends StatelessWidget {
           if (likes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text("${likes.length} Me gusta", style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Text("${likes.length} Me gusta", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
             ),
 
-          // Caption (Título y Cuerpo)
+          // Caption
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 20),
             child: RichText(
               text: TextSpan(
-                style: const TextStyle(color: Colors.black),
+                style: const TextStyle(color: Colors.white),
                 children: [
-                  TextSpan(text: "${data['title']} ", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  TextSpan(text: "\n${data['body']}", style: const TextStyle(fontSize: 14, height: 1.3)),
+                  TextSpan(text: "${data['title']} ", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  TextSpan(text: "\n${data['body']}", style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.white70)),
                 ],
               ),
             ),
@@ -150,6 +149,7 @@ class _NewsCard extends StatelessWidget {
     );
   }
 
+  // --- LÓGICA INTACTA ---
   void _toggleLike(DocumentReference ref, String uid, List currentLikes) {
     if (currentLikes.contains(uid)) {
       ref.update({'likes': FieldValue.arrayRemove([uid])});
