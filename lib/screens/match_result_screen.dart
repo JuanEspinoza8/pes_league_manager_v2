@@ -13,6 +13,7 @@ import '../services/stats_service.dart';
 import '../services/discipline_service.dart';
 import '../services/news_service.dart';
 import '../services/supercopa_progression_service.dart';
+import '../services/sponsorship_service.dart'; // <--- 1. IMPORT NECESARIO
 
 class MatchResultScreen extends StatefulWidget {
   final String seasonId;
@@ -323,6 +324,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
     }
     await StatsService().recalculateTeamStats(widget.seasonId);
 
+    // --- 2. ACTUALIZAR COMPETICIONES ---
     String type = widget.matchData['type'];
     if (type == 'LEAGUE') {
       await StandingsService().recalculateLeagueStandings(widget.seasonId);
@@ -340,8 +342,30 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       }
     }
 
-    // --- LOGICA DE NOTICIAS ---
+    // --- 3. NUEVO: TRIGGER PATROCINIO (Aquí estaba faltando) ---
+    try {
+      String winnerId = "";
+      if (hGoals > aGoals) winnerId = widget.matchData['homeUser'];
+      else if (aGoals > hGoals) winnerId = widget.matchData['awayUser'];
+      else if (definedByPenalties && penaltyScoreStr != null) {
+        try {
+          List<String> parts = penaltyScoreStr.split('-');
+          int hp = int.tryParse(parts[0])??0;
+          int ap = int.tryParse(parts[1])??0;
+          winnerId = (hp > ap) ? widget.matchData['homeUser'] : widget.matchData['awayUser'];
+        } catch(e){}
+      }
 
+      if (winnerId.isNotEmpty && !winnerId.startsWith('TBD') && !winnerId.startsWith('GANADOR')) {
+        String wName = await _getTeamName(winnerId);
+        await SponsorshipService().tryGenerateSponsorshipOffer(widget.seasonId, winnerId, wName);
+      }
+    } catch (e) {
+      print("Error generando sponsor: $e");
+    }
+    // -----------------------------------------------------------
+
+    // --- 4. LOGICA DE NOTICIAS ---
     String homeName = await _getTeamName(widget.matchData['homeUser']);
     String awayName = await _getTeamName(widget.matchData['awayUser']);
 
@@ -384,15 +408,13 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       } catch (e) {}
     }
 
-    // 6. GENERAR NOTICIA (Aquí conectamos los IDs de los usuarios)
+    // GENERAR NOTICIA
     NewsService().createMatchNews(
       seasonId: widget.seasonId,
       homeName: homeName,
       awayName: awayName,
-      // 👇 IDs necesarios para buscar la apariencia del DT 👇
       homeId: widget.matchData['homeUser'],
       awayId: widget.matchData['awayUser'],
-      // ----------------------------------------------------
       homeScore: hGoals,
       awayScore: aGoals,
       competition: type,
@@ -405,7 +427,7 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
       awayForm: awayForm,
     );
 
-    // 7. NOTIFICACIÓN PUSH
+    // NOTIFICACIÓN PUSH
     String bodyText = "$homeName $hGoals - $aGoals $awayName";
     if (definedByPenalties) bodyText += " (Penales: $penaltyScoreStr)";
     await NotificationService.sendGlobalNotification(seasonId: widget.seasonId, title: "FINALIZADO", body: bodyText, type: "MATCH");

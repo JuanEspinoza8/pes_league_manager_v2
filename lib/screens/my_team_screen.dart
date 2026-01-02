@@ -1,7 +1,9 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'squad_builder_screen.dart';
+import 'sponsorship_screen.dart';
 
 class MyTeamScreen extends StatefulWidget {
   final String seasonId;
@@ -20,8 +22,14 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
   bool isLoading = true;
   String currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
+  // --- NUEVO: Variable para guardar si soy admin ---
+  bool isSeasonAdmin = false;
+
   // Cache de partidos para calcular stats
   List<DocumentSnapshot> playedMatches = [];
+
+  // Para el ordenamiento del fixture
+  int _maxLeagueRound = 18; // Valor por defecto
 
   @override
   void initState() {
@@ -31,13 +39,19 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
 
   Future<void> _loadAllData() async {
     try {
-      // 1. Cargar datos del equipo
+      // --- NUEVO: 1. Verificar si soy Admin de la Temporada ---
+      // Consultamos el documento de la temporada para ver quién es el 'adminId'
+      var seasonDoc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).get();
+      String adminId = seasonDoc.data()?['adminId'] ?? '';
+      bool adminCheck = (adminId == currentUserId);
+
+      // 2. Cargar datos del equipo
       var teamDoc = await FirebaseFirestore.instance
           .collection('seasons').doc(widget.seasonId)
           .collection('participants').doc(widget.userId)
           .get();
 
-      // 2. Cargar nombres de equipos (para el Fixture)
+      // 3. Cargar nombres de equipos
       var participantsSnap = await FirebaseFirestore.instance
           .collection('seasons').doc(widget.seasonId)
           .collection('participants')
@@ -48,32 +62,45 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
         names[p.id] = p.data()['teamName'] ?? "Equipo";
       }
 
-      // 3. Cargar Jugadores de la Plantilla
+      // 4. Cargar Plantilla
       List rosterIds = teamDoc.data()?['roster'] ?? [];
       List<DocumentSnapshot> players = [];
       if (rosterIds.isNotEmpty) {
         players = await _fetchPlayers(rosterIds);
       }
 
-      // 4. Cargar HISTORIAL DE PARTIDOS (Para calcular stats en vivo)
+      // 5. Cargar TODOS los partidos (Para stats y fixture)
+      // Nota: Traemos todos para poder calcular el _maxLeagueRound correctamente
       var matchesSnap = await FirebaseFirestore.instance
           .collection('seasons').doc(widget.seasonId)
           .collection('matches')
-          .where('status', isEqualTo: 'PLAYED')
           .get();
 
-      // Filtramos en memoria los que son mios
-      var myPlayed = matchesSnap.docs.where((doc) {
+      var allDocs = matchesSnap.docs;
+
+      // Filtramos los jugados MÍOS para stats
+      var myPlayed = allDocs.where((doc) {
         var d = doc.data();
-        return d['homeUser'] == widget.userId || d['awayUser'] == widget.userId;
+        bool isMine = d['homeUser'] == widget.userId || d['awayUser'] == widget.userId;
+        bool isPlayed = d['status'] == 'PLAYED';
+        return isMine && isPlayed;
       }).toList();
+
+      // Calcular maxLeagueRound real para el ordenamiento
+      int maxR = 18;
+      for(var doc in allDocs) {
+        int r = doc['round'] ?? 0;
+        if(r < 100 && r > maxR) maxR = r;
+      }
 
       if (mounted) {
         setState(() {
+          isSeasonAdmin = adminCheck; // Guardamos el estado del admin
           teamData = teamDoc.data();
           allTeamNames = names;
           rosterDocs = players;
           playedMatches = myPlayed;
+          _maxLeagueRound = maxR; // Actualizamos el máximo detectado
           isLoading = false;
         });
       }
@@ -99,7 +126,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     return allDocs;
   }
 
-  // --- CAMBIAR NOMBRE DEL EQUIPO ---
+  // --- UI ACTIONS ---
   void _showEditTeamNameDialog() {
     TextEditingController _nameCtrl = TextEditingController(text: teamData?['teamName'] ?? "");
     showDialog(
@@ -131,7 +158,6 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     );
   }
 
-  // --- OFERTAR POR JUGADOR ---
   void _showOfferDialog(DocumentSnapshot playerDoc) {
     TextEditingController amountCtrl = TextEditingController();
     showDialog(
@@ -187,13 +213,25 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
           foregroundColor: Colors.white,
           centerTitle: true,
           actions: [
-            // Botón para cambiar nombre (Solo dueño)
-            if (isMyTeam)
+            if (isMyTeam) ...[
+              // NUEVO BOTÓN PATROCINIOS
+              IconButton(
+                icon: const Icon(Icons.monetization_on_outlined, color: Colors.amber),
+                tooltip: "Patrocinios",
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => SponsorshipScreen(
+                    seasonId: widget.seasonId,
+                    userId: widget.userId,
+                    isAdmin: isSeasonAdmin, // --- CORREGIDO: Pasamos la variable real ---
+                  )));
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.edit),
                 tooltip: "Cambiar nombre del equipo",
                 onPressed: _showEditTeamNameDialog,
-              )
+              ),
+            ]
           ],
           bottom: const TabBar(
             indicatorColor: Colors.amber,
@@ -208,12 +246,11 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
           ),
         ),
 
-        // --- BOTÓN FLOTANTE ESTRATEGIA (Solo Dueño) ---
         floatingActionButton: isMyTeam ? FloatingActionButton.extended(
           onPressed: () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => SquadBuilderScreen(
                 seasonId: widget.seasonId,
-                userId: widget.userId // <--- CORREGIDO: Se pasa el ID
+                userId: widget.userId
             )));
           },
           backgroundColor: Colors.amber,
@@ -233,13 +270,12 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     );
   }
 
-  // 1. PESTAÑA RENDIMIENTO (Cálculo en vivo)
+  // --- TAB 1: RENDIMIENTO ---
   Widget _buildPerformanceTab(String name, int budget) {
-    // Calculamos estadísticas recorriendo los partidos jugados REALES
     int matchesPlayed = playedMatches.length;
     int wins = 0;
     int goalsScored = 0;
-    int goalsConceded = 0; // Para vallas invictas
+    int goalsConceded = 0;
     int totalShots = 0;
     int totalPossession = 0;
     int totalPasses = 0;
@@ -255,13 +291,11 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
       int myScore = amHome ? (d['homeScore']??0) : (d['awayScore']??0);
       int rivalScore = amHome ? (d['awayScore']??0) : (d['homeScore']??0);
 
-      // Goles
       goalsScored += myScore;
       goalsConceded += rivalScore;
       if (myScore > rivalScore) wins++;
       if (rivalScore == 0) cleanSheets++;
 
-      // Stats avanzadas (si existen)
       if (d['stats'] != null) {
         var myStats = amHome ? d['stats']['home'] : d['stats']['away'];
         if (myStats != null) {
@@ -275,7 +309,6 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
       }
     }
 
-    // Promedios
     double avgGoals = matchesPlayed > 0 ? goalsScored / matchesPlayed : 0;
     double avgShots = matchesPlayed > 0 ? totalShots / matchesPlayed : 0;
     double avgPossession = matchesPlayed > 0 ? totalPossession / matchesPlayed : 0;
@@ -284,12 +317,12 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     double winPercentage = matchesPlayed > 0 ? (wins / matchesPlayed * 100) : 0;
     double avgInterceptions = matchesPlayed > 0 ? totalInterceptions / matchesPlayed : 0;
     double avgFouls = matchesPlayed > 0 ? totalFouls / matchesPlayed : 0;
+    double avgPasses = matchesPlayed > 0 ? totalPasses / matchesPlayed : 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // TARJETA CABECERA
           Card(
             elevation: 4,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -311,7 +344,6 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
           const Align(alignment: Alignment.centerLeft, child: Text("ANÁLISIS TÁCTICO (Promedios)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey))),
           const SizedBox(height: 10),
 
-          // GRID DE DATOS
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -320,19 +352,19 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
             children: [
-              _statBox("Partidos Jugados", "$matchesPlayed", Icons.calendar_today, Colors.black),
-              _statBox("% Victorias", "${winPercentage.toStringAsFixed(1)}%", Icons.emoji_events, Colors.amber[800]!), // NUEVO
+              _statBox("% Victorias", "${winPercentage.toStringAsFixed(1)}%", Icons.emoji_events, Colors.amber[800]!),
               _statBox("Goles / Partido", avgGoals.toStringAsFixed(1), Icons.sports_soccer, Colors.green),
               _statBox("Tiros al Arco", avgShots.toStringAsFixed(1), Icons.gps_fixed, Colors.blue),
               _statBox("Efectividad", "${effectiveness.toStringAsFixed(0)}%", Icons.bolt, Colors.orange),
               _statBox("Posesión", "${avgPossession.toStringAsFixed(0)}%", Icons.pie_chart, Colors.purple),
-              _statBox("Pases Totales", "$totalPasses", Icons.loop, Colors.grey),
+              _statBox("Pases por Partido", avgPasses.toStringAsFixed(0), Icons.loop, Colors.grey),
               _statBox("Precisión Pases", "${passAccuracy.toStringAsFixed(0)}%", Icons.check_circle, Colors.teal),
               _statBox("Vallas Invictas", "$cleanSheets", Icons.lock_outline, Colors.indigo),
               _statBox("Intercepciones/PJ", avgInterceptions.toStringAsFixed(1), Icons.content_cut, Colors.redAccent),
               _statBox("Faltas/PJ", avgFouls.toStringAsFixed(1), Icons.mood_bad, Colors.brown),
             ],
           ),
+          const SizedBox(height: 100), // Espacio para FAB
         ],
       ),
     );
@@ -359,7 +391,7 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     );
   }
 
-  // 2. PESTAÑA PLANTILLA (Corregida)
+  // --- TAB 2: PLANTILLA ---
   Widget _buildRosterTab(bool isMyTeam) {
     if (rosterDocs.isEmpty) return const Center(child: Text("Sin jugadores en plantilla"));
 
@@ -390,10 +422,9 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
             ),
             title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text("$pos • $age años"),
-            // Solo mostramos precio si vale algo y no es 0
             trailing: value > 0
                 ? Text("\$${(value/1000000).toStringAsFixed(1)}M", style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold))
-                : (!isMyTeam ? const Icon(Icons.monetization_on, color: Colors.green) : null), // Icono de oferta si es rival
+                : (!isMyTeam ? const Icon(Icons.monetization_on, color: Colors.green) : null),
 
             onTap: !isMyTeam ? () => _showOfferDialog(rosterDocs[index]) : null,
           ),
@@ -402,25 +433,87 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
     );
   }
 
-  // 3. PESTAÑA FIXTURE (Arreglada)
+  // --- TAB 3: FIXTURE ---
+  double _getVirtualOrder(int round) {
+    // 1. LIGA
+    if (round < 100) return round.toDouble();
+
+    // 2. SUPERCOPA
+    if (round < 0) return round.toDouble();
+
+    double midSeason = _maxLeagueRound / 2;
+
+    // 3. COPA
+    if (round == 149) return midSeason * 0.3; // Prelim
+    if (round == 150) return midSeason * 0.8; // R1
+    if (round == 151) return midSeason * 1.2; // R2
+    if (round == 152) return midSeason * 1.6; // Semi
+    if (round == 153) return _maxLeagueRound - 0.5; // Final
+
+    // 4. CHAMPIONS GRUPOS
+    if (round >= 201 && round <= 205) {
+      int groupMatchNum = round - 200;
+      return (groupMatchNum * 2) + 0.5;
+    }
+
+    // 5. ELIMINATORIAS EUROPEAS
+    if (round >= 250) {
+      double startOffset = midSeason + 1.0;
+
+      if (round == 250) return startOffset + 1.5;
+      if (round == 251) return startOffset + 2.5;
+
+      if (round == 260) return startOffset + 4.5;
+      if (round == 261) return startOffset + 5.5;
+
+      if (round == 270) return _maxLeagueRound + 2.0;
+    }
+
+    return 999;
+  }
+
+  String _getFriendlyRoundName(Map<String, dynamic> data) {
+    String type = data['type'] ?? '';
+    int round = data['round'] ?? 0;
+    String rawName = data['roundName'] ?? '';
+
+    if (type == 'LEAGUE') return "LIGA - FECHA $round";
+    if (type == 'CHAMPIONS_GROUP') return "UCL - ${rawName.toUpperCase()}";
+    if (type.contains('CHAMPIONS')) return "UCL - ${rawName.toUpperCase()}";
+    if (type == 'CUP') {
+      if (round == 152) return "COPA - FINAL";
+      if (round == 151) return "COPA - SEMIFINAL";
+      if (round == 150) return "COPA - CUARTOS";
+      if (round == 149) return "COPA - PRELIMINAR";
+      return "COPA - ${rawName.toUpperCase()}";
+    }
+    return rawName.toUpperCase();
+  }
+
   Widget _buildFixtureTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('seasons').doc(widget.seasonId)
           .collection('matches')
-          .orderBy('round')
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
         var allMatches = snapshot.data!.docs;
 
-        // Filtramos: 1. Soy Yo, 2. NO está jugado (atrapa SCHEDULED, PENDING, etc)
         var myMatches = allMatches.where((doc) {
           var d = doc.data() as Map<String, dynamic>;
-          bool soyYo = (d['homeUser'] == widget.userId || d['awayUser'] == widget.userId);
+
+          bool amHome = (d['homeUser'] == widget.userId);
+          bool amAway = (d['awayUser'] == widget.userId);
+          bool isConfirmed = amHome || amAway;
+
+          String opponentId = amHome ? d['awayUser'] : d['homeUser'];
+          bool opponentDefined = (opponentId != 'TBD' && !opponentId.startsWith('GANADOR') && !opponentId.startsWith('FINALISTA'));
+
           bool noJugado = (d['status'] != 'PLAYED' && d['status'] != 'REPORTED');
-          return soyYo && noJugado;
+
+          return isConfirmed && opponentDefined && noJugado;
         }).toList();
 
         if (myMatches.isEmpty) {
@@ -429,10 +522,16 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
             children: [
               Icon(Icons.event_available, size: 60, color: Colors.grey),
               SizedBox(height: 10),
-              Text("Estás al día. ¡No hay partidos pendientes!", style: TextStyle(color: Colors.grey)),
+              Text("No tienes partidos próximos confirmados.", style: TextStyle(color: Colors.grey)),
             ],
           ));
         }
+
+        myMatches.sort((a, b) {
+          int rA = (a.data() as Map)['round'] ?? 0;
+          int rB = (b.data() as Map)['round'] ?? 0;
+          return _getVirtualOrder(rA).compareTo(_getVirtualOrder(rB));
+        });
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -441,41 +540,62 @@ class _MyTeamScreenState extends State<MyTeamScreen> {
             var data = myMatches[index].data() as Map<String, dynamic>;
             bool amHome = (data['homeUser'] == widget.userId);
             String opponentId = amHome ? data['awayUser'] : data['homeUser'];
-            String opponentName = allTeamNames[opponentId] ?? "Rival Desconocido";
+
+            String opponentName = allTeamNames[opponentId] ?? "Desconocido";
+            String roundTitle = _getFriendlyRoundName(data);
+
+            Color cardColor;
+            if (data['type'] == 'LEAGUE') cardColor = const Color(0xFF0D1B2A);
+            else if (data['type'] == 'CUP') cardColor = const Color(0xFFE63946);
+            else cardColor = const Color(0xFF1E88E5);
 
             return Card(
-              elevation: 2,
+              elevation: 3,
               margin: const EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: const Color(0xFF0D1B2A), borderRadius: BorderRadius.circular(8)),
-                      child: Column(
-                        children: [
-                          const Text("FECHA", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.white70)),
-                          Text("${data['round']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ],
-                      ),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("TU PRÓXIMO RIVAL", style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                          const SizedBox(height: 4),
-                          Text(opponentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text(amHome ? "(Juegas de LOCAL 🏠)" : "(Juegas de VISITA ✈️)", style: TextStyle(color: amHome ? Colors.blue[800] : Colors.orange[800], fontSize: 12, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
+                    child: Text(
+                      roundTitle,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                      textAlign: TextAlign.center,
                     ),
-                    const Icon(Icons.sports_soccer, color: Colors.grey, size: 30),
-                  ],
-                ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                    child: Row(
+                      children: [
+                        Icon(amHome ? Icons.home : Icons.flight_takeoff, color: Colors.grey, size: 24),
+                        const SizedBox(width: 15),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(opponentName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(
+                                amHome ? "Juegas de LOCAL" : "Juegas de VISITA",
+                                style: TextStyle(
+                                    color: amHome ? Colors.blue[800] : Colors.orange[800],
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text("VS", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.grey.withOpacity(0.3))),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             );
           },

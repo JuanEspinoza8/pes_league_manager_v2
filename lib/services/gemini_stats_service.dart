@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 class GeminiStatsService {
-  // ¡RECUERDA PONER TU API KEY REAL AQUÍ!
-  static const String _apiKey = 'CLAVE';
+
+  static const String _apiKey = 'API KEY';
 
   Future<Map<String, dynamic>?> extractStatsFromImage(Uint8List imageBytes) async {
     try {

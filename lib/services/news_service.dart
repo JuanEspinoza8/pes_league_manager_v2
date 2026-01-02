@@ -7,11 +7,11 @@ import 'package:http/http.dart' as http;
 
 class NewsService {
   // ⚠️ TUS API KEYS
-  static const String _geminiApiKey = 'CLAVE';
-  static const String _pollinationsApiKey = 'CLAVE';
+  static const String _geminiApiKey = 'API KEY';
+  static const String _pollinationsApiKey = 'API KEY';
 
-  final String _cloudName = 'CLAVE';
-  final String _uploadPreset = 'pes_league';
+  final String _cloudName = 'API KEY';
+  final String _uploadPreset = 'API KEY';
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final String _fallbackImage = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?q=80&w=1080&auto=format&fit=crop";
 
@@ -39,10 +39,10 @@ class NewsService {
       final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _geminiApiKey);
 
       List<String> imgVariants = [
-        "ACTION_SHOT: Close up cinematic shot of [PLAYER_NAME] dribbling, intense focus, wearing the club's jersey..",
-        "GOAL_KICK: Action shot of [PLAYER_NAME] striking the ball with power, wearing the club's jersey.",
-        "CELEBRATION: [PLAYER_NAME] screaming and jumping in celebration, wearing the club's jersey.",
-        "MOTM_TROPHY: [PLAYER_NAME] smiling holding the 'Man of the Match' trophy, wearing the club's jersey.",
+        "ACTION_SHOT: Close up cinematic shot of [PLAYER_NAME] dribbling, intense focus, wearing the $winnerName's jersey..",
+        "GOAL_KICK: Action shot of [PLAYER_NAME] striking the ball with power, wearing the $winnerName's jersey.",
+        "CELEBRATION: [PLAYER_NAME] screaming and jumping in celebration, wearing the $winnerName's jersey.",
+        "MOTM_TROPHY: [PLAYER_NAME] smiling holding the 'Man of the Match' trophy, wearing the $winnerName's jersey.",
         "CROWD_CRAZY: The fans of $winnerName going crazy in the stands with flares.",
         "MANAGER_REACTION: The manager of $winnerName clapping hands from the sideline.", // <--- Variante DT
         "TEAM_HUDDLE: Players of $winnerName hugging in a group celebration."
@@ -172,6 +172,37 @@ class NewsService {
         Noticia: $narrative. JSON: { "title": "TITULAR DRAMA", "body": "Texto corto.", "image_prompt": "Sad players of $teamName walking off pitch, dramatic rain." }
       ''');
     await _processAndUpload(seasonId, model, prompt, {'type': 'COMPETITION'});
+  }
+
+  // --- 5. NUEVO: NOTICIA DE PATROCINIO ---
+  Future<void> createSponsorshipNews({
+    required String seasonId,
+    required String teamName,
+    required String brandName,
+    required int amount
+  }) async {
+    try {
+      final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _geminiApiKey);
+      String priceStr = "\$${(amount / 1000000).toStringAsFixed(2)}M";
+
+      final prompt = Content.text('''
+        Noticia deportiva: El club $teamName ha cumplido exitosamente los objetivos de su patrocinador $brandName y recibe un pago de $priceStr.
+        
+        INSTRUCCIONES:
+        - Titular corto y financiero/exitoso.
+        - Imagen realista, ambiente de negocios o celebración corporativa.
+        
+        JSON: {
+          "title": "OBJETIVO CUMPLIDO",
+          "body": "Breve resumen del éxito financiero para el club.",
+          "image_prompt": "Realistic cinematic photo. A soccer manager shaking hands with a business executive in a modern office, or holding a check with $brandName logo. High detail, 4k."
+        }
+      ''');
+
+      await _processAndUpload(seasonId, model, prompt, {'type': 'SPONSORSHIP'});
+    } catch (e) {
+      print("❌ Error Sponsor News: $e");
+    }
   }
 
   Future<void> _processAndUpload(String seasonId, GenerativeModel model, Content prompt, Map<String, dynamic> meta) async {

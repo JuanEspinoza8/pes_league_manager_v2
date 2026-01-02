@@ -148,9 +148,6 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        actions: [
-          // El botón de debug lo mostraremos condicionalmente abajo
-        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).snapshots(),
@@ -333,14 +330,18 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                               // 2. FASE DE DRAFT (Acciones de usuario)
                               if (status == 'DRAFT_PHASE' || status == 'AUCTION') ...[
                                 if (acquisitionMode == 'AUCTION')
-                                  Row(
-                                    children: [
-                                      Expanded(child: _ActionButton(text: "SUBASTA", icon: Icons.gavel, color: Colors.amber[800]!, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AuctionRoom(seasonId: widget.seasonId, isAdmin: isAdmin))))),
-                                      const SizedBox(width: 10),
-                                      Expanded(child: _ActionButton(text: "TIENDA", icon: Icons.store, color: Colors.purple, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PackOpener(seasonId: widget.seasonId))))),
-                                    ],
+                                // --- CORRECCIÓN: SOLO BOTÓN DE SUBASTA ---
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: _ActionButton(
+                                        text: "ENTRAR A LA SUBASTA",
+                                        icon: Icons.gavel,
+                                        color: Colors.amber[800]!,
+                                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AuctionRoom(seasonId: widget.seasonId, isAdmin: isAdmin)))
+                                    ),
                                   )
                                 else
+                                // Modo Sobres (Mantenemos igual)
                                   SizedBox(
                                     width: double.infinity,
                                     child: _ActionButton(
@@ -372,7 +373,7 @@ class _LobbyWaitingRoomState extends State<LobbyWaitingRoom> {
                                     child: TextButton.icon(
                                       icon: const Icon(Icons.play_circle_fill, color: Colors.green),
                                       label: const Text("FINALIZAR DRAFT E INICIAR LIGA", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                      onPressed: () => _showSupercopaSelectionAndStart(context), // CAMBIO AQUÍ
+                                      onPressed: () => _showSupercopaSelectionAndStart(context),
                                     ),
                                   )
                                 ]

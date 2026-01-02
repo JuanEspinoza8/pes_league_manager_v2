@@ -8,8 +8,8 @@ class StandingsService {
   }
 
   Future<void> recalculateChampionsStandings(String seasonId) async {
-    // Solo partidos de grupos (Ronda 200 a 249)
-    await _recalculateTable(seasonId, 'CHAMPIONS', 'championsStats', maxRound: 249);
+    // CORRECCIÓN: El tipo correcto guardado en la DB es 'CHAMPIONS_GROUP'
+    await _recalculateTable(seasonId, 'CHAMPIONS_GROUP', 'championsStats', maxRound: 249);
   }
 
   Future<void> _recalculateTable(String seasonId, String type, String fieldName, {int maxRound = 999}) async {
