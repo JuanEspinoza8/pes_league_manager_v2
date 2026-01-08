@@ -133,6 +133,7 @@ class _MidSeasonShopState extends State<MidSeasonShop> {
     final Random rnd = Random();
 
     try {
+      // Validaciones previas
       DocumentSnapshot userSnap = await userRef.get();
       if ((userSnap['budget'] ?? 0) < cost) throw "Fondos insuficientes.";
 
@@ -189,27 +190,47 @@ class _MidSeasonShopState extends State<MidSeasonShop> {
 
       List<Map<String, dynamic>> finalData = selectedDocs.map((d) => d.data() as Map<String, dynamic>).toList();
 
+      // --- TRANSACCIÓN CORREGIDA (Reads antes de Writes) ---
       await db.runTransaction((tx) async {
+        // 1. LEER TODO PRIMERO
         DocumentSnapshot freshSeasonSnap = await tx.get(seasonRef);
+        DocumentSnapshot freshUserSnap = await tx.get(userRef);
+
+        // 2. VERIFICACIONES LÓGICAS
         List freshTaken = freshSeasonSnap['takenPlayerIds'] ?? [];
         for (String id in selectedIds) {
           if (!trampaUsada && freshTaken.contains(id)) throw "Error de stock. Reintenta.";
         }
-        Map<String, dynamic> userUpdates = {
-          'budget': FieldValue.increment(-cost),
-          'roster': FieldValue.arrayRemove(discardedIds)
-        };
-        if (trampaUsada) userUpdates['rigged_next_pack'] = FieldValue.delete();
-        tx.update(userRef, userUpdates);
 
-        DocumentSnapshot freshUserSnap = await tx.get(userRef);
+        // 3. CALCULAR NUEVO ESTADO DEL USUARIO (en memoria)
+        // Presupuesto
+        int currentBudget = freshUserSnap['budget'] ?? 0;
+        int newBudget = currentBudget - cost;
+        if (newBudget < 0) throw "Fondos insuficientes.";
+
+        // Roster
         List currentRoster = List.from(freshUserSnap['roster'] ?? []);
+        // Quitar sacrificados
         currentRoster.removeWhere((id) => discardedIds.contains(id));
+        // Agregar nuevos
         currentRoster.addAll(selectedIds);
-        tx.update(userRef, {'roster': currentRoster});
-        tx.update(seasonRef, {'takenPlayerIds': FieldValue.arrayUnion(selectedIds)});
-      });
 
+        // 4. ESCRIBIR TODO AL FINAL
+        Map<String, dynamic> userUpdates = {
+          'budget': newBudget,
+          'roster': currentRoster
+        };
+
+        if (trampaUsada) {
+          userUpdates['rigged_next_pack'] = FieldValue.delete();
+        }
+
+        tx.update(userRef, userUpdates); // Write User
+        tx.update(seasonRef, {'takenPlayerIds': FieldValue.arrayUnion(selectedIds)}); // Write Season
+      });
+      // -----------------------------------------------------
+
+      // Crear subastas de descarte (fuera de la transacción principal para no bloquear)
       var auctionCol = seasonRef.collection('discard_auctions');
       for (String pid in discardedIds) {
         var pDoc = myRoster.firstWhere((d) => d.id == pid, orElse: () => myRoster.first);
@@ -226,8 +247,6 @@ class _MidSeasonShopState extends State<MidSeasonShop> {
           'status': 'ACTIVE'
         });
       }
-
-      // --- AQUÍ SE ELIMINÓ CUALQUIER LLAMADA A NOTICIAS ---
 
       _fetchMyRoster();
       setState(() => isOpening = false);
