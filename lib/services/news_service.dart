@@ -3,6 +3,8 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import '../services/news_service.dart';
+import '../services/notification_service.dart';
 import 'package:http/http.dart' as http;
 
 class NewsService {
@@ -15,15 +17,41 @@ class NewsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final String _fallbackImage = "https://images.unsplash.com/photo-1522770179533-24471fcdba45?q=80&w=1080&auto=format&fit=crop";
 
+  // --- NUEVA FUNCIÓN: NOTICIA MANUAL CON IMAGEN PROPIA ---
+  Future<void> createManualNews({
+    required String seasonId,
+    required String title,
+    required String body,
+    required Uint8List imageBytes,
+  }) async {
+    try {
+      // 1. Subir imagen a Cloudinary (Reutilizamos la función existente)
+      String imageUrl = await _uploadToCloudinary(imageBytes);
+
+      // 2. Guardar en Firestore directamente (Sin pasar por IA)
+      await _db.collection('seasons').doc(seasonId).collection('news').add({
+        'type': 'CUSTOM_MANUAL',
+        'title': title,
+        'body': body,
+        'imageUrl': imageUrl,
+        'timestamp': FieldValue.serverTimestamp(),
+        'likes': [],
+        'meta': {'author': 'ADMIN'}
+      });
+    } catch (e) {
+      print("❌ Error Manual News: $e");
+      rethrow;
+    }
+  }
+  // -------------------------------------------------------
+
   // --- 1. NOTICIA DE PARTIDO ---
   Future<void> createMatchNews({
     required String seasonId,
     required String homeName,
     required String awayName,
-    // 👇 NUEVOS PARÁMETROS: IDs para buscar la apariencia del DT
     required String homeId,
     required String awayId,
-    // ---------------------------------------------------------
     required int homeScore,
     required int awayScore,
     String? competition,
@@ -44,7 +72,7 @@ class NewsService {
         "CELEBRATION: [PLAYER_NAME] screaming and jumping in celebration, wearing the $winnerName's jersey.",
         "MOTM_TROPHY: [PLAYER_NAME] smiling holding the 'Man of the Match' trophy, wearing the $winnerName's jersey.",
         "CROWD_CRAZY: The fans of $winnerName going crazy in the stands with flares.",
-        "MANAGER_REACTION: The manager of $winnerName clapping hands from the sideline.", // <--- Variante DT
+        "MANAGER_REACTION: The manager of $winnerName clapping hands from the sideline.",
         "TEAM_HUDDLE: Players of $winnerName hugging in a group celebration."
       ];
 
@@ -58,10 +86,7 @@ class NewsService {
       String managerLook = "";
       if (selectedVariant.contains("MANAGER_REACTION") && winnerName != null) {
         try {
-          // Identificar ID del ganador para buscar su descripción
           String winnerId = (winnerName == homeName) ? homeId : awayId;
-
-          // Ignoramos si es un ID de sistema (TBD, GANADOR...)
           if (!winnerId.startsWith("TBD") && !winnerId.startsWith("GANADOR")) {
             var doc = await _db.collection('seasons').doc(seasonId).collection('participants').doc(winnerId).get();
             if (doc.exists && doc.data() != null && doc.data()!.containsKey('managerDescription')) {
@@ -86,6 +111,7 @@ class NewsService {
       if (homeForm != null) context += " Contexto Local: $homeForm.";
       if (awayForm != null) context += " Contexto Visita: $awayForm.";
 
+      // PROMPT ORIGINAL COMPLETO RESTAURADO
       final prompt = Content.text('''
         Eres un redactor deportivo. INFO PARTIDO: $context
         
@@ -124,6 +150,7 @@ class NewsService {
       ];
       String selectedVariant = imgVariants[Random().nextInt(imgVariants.length)];
 
+      // PROMPT ORIGINAL COMPLETO RESTAURADO
       final prompt = Content.text('''
         Fichaje: $playerName de $fromTeam a $toTeam por $priceStr.
         REGLAS TEXTO: NO inventes DTs reales (Xavi, Pep). Cíñete a los datos.
@@ -144,6 +171,7 @@ class NewsService {
     try {
       final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _geminiApiKey);
 
+      // PROMPT ORIGINAL COMPLETO RESTAURADO
       final prompt = Content.text('''
         Redacta una noticia corta sobre: "$topic".
         
@@ -174,7 +202,7 @@ class NewsService {
     await _processAndUpload(seasonId, model, prompt, {'type': 'COMPETITION'});
   }
 
-  // --- 5. NUEVO: NOTICIA DE PATROCINIO ---
+  // --- 5. NOTICIA DE PATROCINIO ---
   Future<void> createSponsorshipNews({
     required String seasonId,
     required String teamName,
@@ -185,6 +213,7 @@ class NewsService {
       final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _geminiApiKey);
       String priceStr = "\$${(amount / 1000000).toStringAsFixed(2)}M";
 
+      // PROMPT ORIGINAL COMPLETO RESTAURADO
       final prompt = Content.text('''
         Noticia deportiva: El club $teamName ha cumplido exitosamente los objetivos de su patrocinador $brandName y recibe un pago de $priceStr.
         
@@ -225,18 +254,53 @@ class NewsService {
   }
 
   Future<String> _tryGenerateWithFallback(String prompt) async {
+    // 1. INTENTO: NANOBANANA (Alta calidad)
     try {
-      // PLAN A: GPTIMAGE (Mejor para caras)
-      print("🎨 [IA] Plan A: nanobanana...");
+      print("🎨 [IA] Plan A: Probando 'nanobanana'...");
       return await _generateAndUploadImage(prompt, model: 'nanobanana', resolution: 1024, timeoutSeconds: 80);
     } catch (e) {
-      print("⚠️ GPTIMAGE falló ($e). Intentando TURBO...");
+      print("⚠️ nanobanana falló ($e). Pasando al Plan B...");
+
+      // 2. INTENTO: KONTEXT
       try {
-        // PLAN B: TURBO (Rápido)
-        return await _generateAndUploadImage(prompt, model: 'turbo', resolution: 768, timeoutSeconds: 45);
+        print("🎨 [IA] Plan B: Probando 'kontext'...");
+        return await _generateAndUploadImage(prompt, model: 'kontext', resolution: 1024, timeoutSeconds: 80);
       } catch (e2) {
-        print("⚠️ Todo falló. Usando estadio.");
-        return _fallbackImage;
+        print("⚠️ kontext falló ($e2). Pasando al Plan C...");
+
+        // 3. INTENTO: SEEDREAM
+        try {
+          print("🎨 [IA] Plan C: Probando 'seedream'...");
+          return await _generateAndUploadImage(prompt, model: 'seedream', resolution: 1024, timeoutSeconds: 80);
+        } catch (e3) {
+          print("⚠️ seedream falló ($e3). Pasando al Plan D...");
+
+          // 4. INTENTO: GPTIMAGE-LARGE
+          try {
+            print("🎨 [IA] Plan D: Probando 'gptimage-large'...");
+            return await _generateAndUploadImage(prompt, model: 'gptimage-large', resolution: 1024, timeoutSeconds: 80);
+          } catch (e4) {
+            print("⚠️ gptimage-large falló ($e4). Pasando al Plan E...");
+
+            // 5. INTENTO: GPTIMAGE (Estándar)
+            try {
+              print("🎨 [IA] Plan E: Probando 'gptimage'...");
+              return await _generateAndUploadImage(prompt, model: 'gptimage', resolution: 1024, timeoutSeconds: 80);
+            } catch (e5) {
+              print("⚠️ gptimage falló ($e5). Pasando al Plan F (Turbo)...");
+
+              // 6. INTENTO: TURBO (Rápido y baja resolución)
+              try {
+                print("🚀 [IA] Plan F: Último recurso con 'turbo'...");
+                return await _generateAndUploadImage(prompt, model: 'turbo', resolution: 768, timeoutSeconds: 45);
+              } catch (e6) {
+                // FALLBACK FINAL: IMAGEN DE ESTADIO
+                print("❌ ERROR CRÍTICO: Todos los modelos fallaron. Usando imagen genérica.");
+                return _fallbackImage;
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AuctionService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // --- CONFIGURACIÓN DE FASES ---
+  // --- CONFIGURACIÓN DE FASES (CORREGIDA: Sin caracteres especiales) ---
   static const List<Map<String, dynamic>> PHASES = [
     {'name': 'Porteros', 'position': 'PO', 'count': 1},
     {'name': 'Laterales Derechos', 'position': 'LD', 'count': 1},
@@ -14,9 +14,10 @@ class AuctionService {
     {'name': 'Mediocentro Defensivo', 'position': 'MCD', 'count': 1},
     {'name': 'Mediocentro', 'position': 'MC', 'count': 1},
     {'name': 'Mediapunta', 'position': 'MO', 'count': 1},
-    {'name': 'Extremo/Interior Derecho', 'position': 'EXD/MDD', 'count': 1},
-    {'name': 'Extremo/Interior Izquierdo', 'position': 'EXI/MDI', 'count': 1},
-    {'name': 'Delantero/Segunda Punta', 'position': 'CD/SD', 'count': 1},
+    // CAMBIO: Usamos guion bajo (_) en lugar de barra (/) para evitar errores
+    {'name': 'Extremo/Interior Derecho', 'position': 'EXD_MDD', 'count': 1},
+    {'name': 'Extremo/Interior Izquierdo', 'position': 'EXI_MDI', 'count': 1},
+    {'name': 'Delantero/Segunda Punta', 'position': 'CD_SD', 'count': 1},
     {'name': 'Banca de Suplentes', 'position': 'BANCA', 'count': 5},
   ];
 
@@ -35,7 +36,7 @@ class AuctionService {
         'auctionStatus': {
           'PO': 0, 'LD': 0, 'LI': 0, 'DEC': 0,
           'MCD': 0, 'MC': 0, 'MO': 0,
-          'EXD/MDD': 0, 'EXI/MDI': 0, 'CD/SD': 0,
+          'EXD_MDD': 0, 'EXI_MDI': 0, 'CD_SD': 0,
           'BANCA': 0
         }
       });
@@ -48,7 +49,7 @@ class AuctionService {
       'phaseName': PHASES[0]['name'],
       'currentPosition': PHASES[0]['position'],
       'currentPlayer': null,
-      'currentBid': 40000000,
+      'currentBid': 20000000,
       'highestBidderId': null,
       'highestBidderName': null,
       'timerEnd': null,
@@ -82,9 +83,10 @@ class AuctionService {
     if (isBench) {
       query = query.where('rating', isLessThan: 83);
     } else {
-      if (positionNeeded == 'EXD/MDD') query = query.where('position', whereIn: ['EXD', 'MDD']);
-      else if (positionNeeded == 'EXI/MDI') query = query.where('position', whereIn: ['EXI', 'MDI']);
-      else if (positionNeeded == 'CD/SD') query = query.where('position', whereIn: ['CD', 'SD']);
+      // Mapeo de claves nuevas (_) a valores reales de la BD
+      if (positionNeeded == 'EXD_MDD') query = query.where('position', whereIn: ['EXD', 'MDD']);
+      else if (positionNeeded == 'EXI_MDI') query = query.where('position', whereIn: ['EXI', 'MDI']);
+      else if (positionNeeded == 'CD_SD') query = query.where('position', whereIn: ['CD', 'SD']);
       else query = query.where('position', isEqualTo: positionNeeded);
     }
 
@@ -105,10 +107,10 @@ class AuctionService {
       'state': 'BIDDING',
       'currentPlayer': randomDoc.data(),
       'currentPlayerId': randomDoc.id,
-      'currentBid': 40000000,
+      'currentBid': 20000000,
       'highestBidderId': null,
       'highestBidderName': null,
-      'timerEnd': DateTime.now().add(const Duration(seconds: 60)),
+      'timerEnd': DateTime.now().add(const Duration(seconds: 30)),
     });
   }
 
@@ -163,13 +165,14 @@ class AuctionService {
 
     String resultMessage = "";
 
-    // ESCENARIO A: HUBO GANADOR
+    // CASO A: HUBO GANADOR
     if (winnerId != null && playerId != null) {
       int cost = data['currentBid'];
       resultMessage = "✅ VENDIDO a $winnerName\npor \$${(cost/1000000).toStringAsFixed(1)}M";
 
       WriteBatch batch = _db.batch();
       var userRef = _db.collection('seasons').doc(seasonId).collection('participants').doc(winnerId);
+
       batch.update(userRef, {
         'budget': FieldValue.increment(-cost),
         'roster': FieldValue.arrayUnion([playerId]),
@@ -178,22 +181,30 @@ class AuctionService {
 
       batch.update(_auctionRef(seasonId), {
         'takenPlayers': FieldValue.arrayUnion([playerId]),
-        'skipsConsecutive': 0, // ¡AQUÍ SÍ SE REINICIA! (Alguien compró)
         'state': 'PAUSED',
         'lastResult': resultMessage,
-        'timerEnd': null
+        'timerEnd': null,
+        'skipsConsecutive': 0
       });
 
       await batch.commit();
       await _checkBankruptcy(seasonId, winnerId);
     }
-    // ESCENARIO B: NADIE PUJÓ
+    // CASO B: NADIE PUJÓ
     else {
       int skips = (data['skipsConsecutive'] ?? 0) + 1;
 
-      if (skips < 3) {
-        // Skip normal (1 o 2)
-        resultMessage = "⏭️ NADIE OFERTÓ (Skip $skips/3)\nEl jugador se descarta.";
+      int activeUsers = await _countActiveUsersInPhase(seasonId, data['phaseIndex']);
+      bool isSoleSurvivor = activeUsers <= 1;
+
+      int limit = isSoleSurvivor ? 2 : 3;
+
+      if (skips < limit) {
+        // Skip Permitido
+        resultMessage = isSoleSurvivor
+            ? "⏭️ NADIE OFERTÓ (Último aviso, estás solo).\nJugador descartado."
+            : "⏭️ NADIE OFERTÓ (Skip $skips de la Fase).\nJugador descartado.";
+
         await _auctionRef(seasonId).update({
           'skipsConsecutive': skips,
           'takenPlayers': FieldValue.arrayUnion([playerId]),
@@ -202,11 +213,12 @@ class AuctionService {
           'timerEnd': null
         });
       } else {
-        // CASTIGO (Skip 3, 4, 5...)
-        // Pasamos 'skips' para NO reiniciarlo en la base de datos
-        String assignedUser = await _forceAssignRandomly(seasonId, playerId!, playerData!, skips);
+        // CASTIGO FORZADO
+        String assignedUser = await _forceAssignRandomly(seasonId, playerId!, playerData!, skips, isSoleSurvivor);
 
-        resultMessage = "🎲 ASIGNACIÓN FORZADA (Skip $skips)\nAsignado a: $assignedUser (+50M Bono)";
+        resultMessage = isSoleSurvivor
+            ? "🎲 ASIGNACIÓN FORZADA (Sin bono)\nAsignado a: $assignedUser"
+            : "🎲 ASIGNACIÓN FORZADA (+50M Bono)\nAsignado a: $assignedUser";
 
         await _auctionRef(seasonId).update({
           'state': 'PAUSED',
@@ -224,7 +236,21 @@ class AuctionService {
 
   // --- MÉTODOS AUXILIARES ---
 
-  Future<String> _forceAssignRandomly(String seasonId, String playerId, Map<String, dynamic> playerData, int currentSkips) async {
+  Future<int> _countActiveUsersInPhase(String seasonId, int phaseIndex) async {
+    String currentPos = PHASES[phaseIndex]['position'];
+    int maxNeeded = PHASES[phaseIndex]['count'];
+    var users = await _db.collection('seasons').doc(seasonId).collection('participants').get();
+    int count = 0;
+    for (var u in users.docs) {
+      Map status = u.data()['auctionStatus'] ?? {};
+      if ((status[currentPos] ?? 0) < maxNeeded) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  Future<String> _forceAssignRandomly(String seasonId, String playerId, Map<String, dynamic> playerData, int currentSkips, bool isSoleSurvivor) async {
     var auctionData = (await _auctionRef(seasonId).get()).data() as Map<String, dynamic>;
     int phaseIndex = auctionData['phaseIndex'];
     String currentPos = PHASES[phaseIndex]['position'];
@@ -243,16 +269,19 @@ class AuctionService {
     if (needyUsers.isNotEmpty) {
       var luckyUser = needyUsers[Random().nextInt(needyUsers.length)];
 
+      int bonus = isSoleSurvivor ? 0 : 50000000;
+
       WriteBatch batch = _db.batch();
+
       batch.update(luckyUser.reference, {
         'roster': FieldValue.arrayUnion([playerId]),
-        'budget': FieldValue.increment(50000000),
+        'budget': FieldValue.increment(bonus),
         'auctionStatus.$currentPos': FieldValue.increment(1)
       });
 
       batch.update(_auctionRef(seasonId), {
         'takenPlayers': FieldValue.arrayUnion([playerId]),
-        'skipsConsecutive': currentSkips // <--- AQUÍ ESTÁ EL CAMBIO: NO SE REINICIA A 0
+        'skipsConsecutive': currentSkips
       });
 
       await batch.commit();
@@ -265,6 +294,9 @@ class AuctionService {
   Future<void> _checkPhaseCompletion(String seasonId) async {
     var auctionData = (await _auctionRef(seasonId).get()).data() as Map<String, dynamic>;
     int phaseIndex = auctionData['phaseIndex'];
+
+    if (phaseIndex >= PHASES.length) return;
+
     String currentPos = PHASES[phaseIndex]['position'];
     int maxNeeded = PHASES[phaseIndex]['count'];
 
@@ -298,7 +330,7 @@ class AuctionService {
         'phaseIndex': nextIdx,
         'phaseName': PHASES[nextIdx]['name'],
         'currentPosition': PHASES[nextIdx]['position'],
-        'skipsConsecutive': 0 // Se reinicia al cambiar de posición
+        'skipsConsecutive': 0
       });
       await drawNextPlayer(seasonId);
     } else {
@@ -343,5 +375,59 @@ class AuctionService {
         await batch.commit();
       }
     }
+  }
+
+  // --- HERRAMIENTA DE MIGRACIÓN (EJECUTAR UNA VEZ DESDE UN BOTÓN) ---
+  Future<void> migrateLegacyKeys(String seasonId) async {
+    print("--- INICIANDO MIGRACIÓN DB (Quitar Barras /) ---");
+
+    // 1. Corregir a los Participantes
+    var users = await _db.collection('seasons').doc(seasonId).collection('participants').get();
+
+    for (var doc in users.docs) {
+      Map<String, dynamic> data = doc.data();
+      Map<String, dynamic> status = Map<String, dynamic>.from(data['auctionStatus'] ?? {});
+      bool changed = false;
+
+      void renameKey(String oldKey, String newKey) {
+        if (status.containsKey(oldKey)) {
+          status[newKey] = status[oldKey];
+          status.remove(oldKey);
+          changed = true;
+        }
+      }
+
+      renameKey('EXD/MDD', 'EXD_MDD');
+      renameKey('EXI/MDI', 'EXI_MDI');
+      renameKey('CD/SD', 'CD_SD');
+
+      if (changed) {
+        await doc.reference.update({'auctionStatus': status});
+        print("Usuario corregido: ${data['teamName'] ?? doc.id}");
+      }
+    }
+
+    // 2. Corregir estado global de la subasta
+    var auctionRef = _db.collection('seasons').doc(seasonId).collection('auction').doc('status');
+    var auctionDoc = await auctionRef.get();
+
+    if (auctionDoc.exists) {
+      String currentPos = auctionDoc.data()?['currentPosition'] ?? '';
+
+      Map<String, String> replacements = {
+        'EXD/MDD': 'EXD_MDD',
+        'EXI/MDI': 'EXI_MDI',
+        'CD/SD': 'CD_SD'
+      };
+
+      if (replacements.containsKey(currentPos)) {
+        await auctionRef.update({
+          'currentPosition': replacements[currentPos]
+        });
+        print("Estado de subasta corregido: $currentPos -> ${replacements[currentPos]}");
+      }
+    }
+
+    print("--- MIGRACIÓN COMPLETADA CON ÉXITO ---");
   }
 }

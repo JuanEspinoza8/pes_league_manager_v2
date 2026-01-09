@@ -292,8 +292,10 @@ class _MidSeasonShopState extends State<MidSeasonShop> {
   }
 
   Widget _buildPackCard({required String title, required String desc, required int cost, required List<Color> colors, required IconData icon, required VoidCallback onTap, bool isLegend = false}) {
+    // CORRECCIÓN: Usamos constraints en lugar de height fijo para evitar overflow si el texto crece
     return Container(
-      height: 150, margin: const EdgeInsets.only(bottom: 25),
+      constraints: const BoxConstraints(minHeight: 150),
+      margin: const EdgeInsets.only(bottom: 25),
       decoration: BoxDecoration(
           gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
           borderRadius: BorderRadius.circular(24),
@@ -308,7 +310,7 @@ class _MidSeasonShopState extends State<MidSeasonShop> {
               const SizedBox(width: 15),
               Text(title, style: TextStyle(color: isLegend ? const Color(0xFFD4AF37) : Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1)),
             ]),
-            const Spacer(),
+            const SizedBox(height: 20), // Spacer reemplazado por SizedBox para seguridad en Column flexible
             Text(desc, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
             const SizedBox(height: 8),
             Text("\$${(cost/1000000).toStringAsFixed(0)}M", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),

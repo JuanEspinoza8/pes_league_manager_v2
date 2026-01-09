@@ -464,7 +464,14 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
                 decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("📊 Estadísticas Avanzadas (Posesión, Tiros...)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70)), Icon(showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20, color: goldColor)]),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  // CORRECCIÓN: Usamos Expanded y TextOverflow para evitar el overflow derecho de 22 pixels
+                  const Expanded(
+                      child: Text("📊 Estadísticas Avanzadas (Posesión, Tiros...)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white70), overflow: TextOverflow.ellipsis, maxLines: 1)
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 20, color: goldColor)
+                ]),
               ),
             ),
             if (showAdvanced) Container(

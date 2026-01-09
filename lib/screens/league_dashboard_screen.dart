@@ -18,6 +18,7 @@ import '../services/champions_progression_service.dart';
 import '../services/standings_service.dart';
 import '../services/stats_service.dart';
 import '../utils/debug_tools.dart';
+import 'custom_news_screen.dart';
 
 class LeagueDashboardScreen extends StatefulWidget {
   final String seasonId;
@@ -332,9 +333,7 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
   }
 
   void _showGiftPlayerDialog() {
-    // ... (Mantengo la lógica de los diálogos simple, solo cambiando colores de fondo si es necesario,
-    // pero para no alargar demasiado el código aquí, asumimos que los diálogos heredan el tema oscuro o se ajustan puntualmente como los anteriores)
-    // Se deja igual la estructura lógica.
+
     final TextEditingController playerController = TextEditingController();
     String? selectedUserId;
 

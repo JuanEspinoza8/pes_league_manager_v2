@@ -15,7 +15,7 @@ class AuctionRoom extends StatefulWidget {
 }
 
 class _AuctionRoomState extends State<AuctionRoom> {
-  // --- LÓGICA INTACTA ---
+  // --- LÓGICA ---
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
   final AuctionService _auctionService = AuctionService();
 
@@ -33,7 +33,12 @@ class _AuctionRoomState extends State<AuctionRoom> {
   void _syncTimer(Timestamp? firestoreTime) {
     if (firestoreTime == null) {
       _timer?.cancel();
-      if (mounted) setState(() => _timeLeft = 0);
+      // --- CORRECCIÓN 1: Evita el error "setState called during build" ---
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _timeLeft != 0) {
+          setState(() => _timeLeft = 0);
+        }
+      });
       return;
     }
     DateTime targetTime = firestoreTime.toDate();
@@ -83,7 +88,7 @@ class _AuctionRoomState extends State<AuctionRoom> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1120), // Fondo Global V2
+      backgroundColor: const Color(0xFF0B1120),
       appBar: AppBar(
         title: const Text("SALA DE SUBASTAS", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 18)),
         backgroundColor: const Color(0xFF0F172A),
@@ -91,12 +96,30 @@ class _AuctionRoomState extends State<AuctionRoom> {
         centerTitle: true,
         foregroundColor: Colors.white,
         actions: [
-          if (widget.isAdmin)
+          if (widget.isAdmin) ...[
+            // BOTÓN DE MIGRACIÓN (EJECUTAR UNA VEZ PARA ARREGLAR LA BD)
+            IconButton(
+              icon: const Icon(Icons.build, color: Colors.amberAccent),
+              tooltip: "🛠️ Migrar DB (Fix /)",
+              onPressed: () async {
+                await _auctionService.migrateLegacyKeys(widget.seasonId);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("✅ Base de datos migrada (Barras eliminadas)"),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+            ),
+            // BOTÓN DE FORZAR JUGADOR
             IconButton(
               icon: const Icon(Icons.refresh, color: Colors.redAccent),
               onPressed: () => _auctionService.drawNextPlayer(widget.seasonId),
               tooltip: "Forzar siguiente jugador",
-            )
+            ),
+          ]
         ],
       ),
       body: Container(
@@ -131,17 +154,29 @@ class _AuctionRoomState extends State<AuctionRoom> {
 
             _syncTimer(auctionData['timerEnd']);
 
-            return Column(
-              children: [
-                _buildPhaseHeader(auctionData),
-                const Spacer(),
-                if (auctionData['currentPlayer'] != null)
-                  _buildPlayerCard(auctionData['currentPlayer'], auctionData),
-                if (auctionData['currentPlayer'] == null)
-                  const Text("Sorteando jugador...", style: TextStyle(color: Colors.white54)),
-                const Spacer(),
-                _buildUserControls(auctionData),
-              ],
+            // --- CORRECCIÓN 2: Solución al Overflow (Pantalla Amarilla) ---
+            return LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          children: [
+                            _buildPhaseHeader(auctionData),
+                            const Spacer(),
+                            if (auctionData['currentPlayer'] != null)
+                              _buildPlayerCard(auctionData['currentPlayer'], auctionData),
+                            if (auctionData['currentPlayer'] == null)
+                              const Text("Sorteando jugador...", style: TextStyle(color: Colors.white54)),
+                            const Spacer(),
+                            _buildUserControls(auctionData),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
             );
           },
         ),

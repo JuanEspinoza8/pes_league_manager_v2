@@ -148,7 +148,8 @@ class _MatchesTabState extends State<MatchesTab> {
                       }),
                       child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          // CORRECCIÓN: Reducimos padding vertical para evitar overflow de 2.0px
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                           decoration: BoxDecoration(
                               color: isSelected ? activeColor.withOpacity(0.2) : Colors.white.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(16),
