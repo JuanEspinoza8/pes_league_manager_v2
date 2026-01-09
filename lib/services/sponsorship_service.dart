@@ -6,27 +6,98 @@ class SponsorshipService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   static const List<Map<String, dynamic>> BRANDS = [
-    {'name': 'Local Store', 'tier': 1, 'multiplier': 1.0, 'icon': '🏪'},
-    {'name': 'Generic Sport', 'tier': 1, 'multiplier': 1.2, 'icon': '👟'},
-    {'name': 'Puma', 'tier': 2, 'multiplier': 2.0, 'icon': '🐆'},
-    {'name': 'Adidas', 'tier': 3, 'multiplier': 3.5, 'icon': '🕉️'},
-    {'name': 'Nike', 'tier': 3, 'multiplier': 3.8, 'icon': '✔️'},
-    {'name': 'Emirates', 'tier': 3, 'multiplier': 4.0, 'icon': '✈️'},
+    {'name': 'Churreria La Araña', 'tier': 1, 'multiplier': 0.7, 'icon': '🏪'},
+    {'name': 'Mateo Maderas', 'tier': 1, 'multiplier': 1.0, 'icon': '🐴🪵'},
+    {'name': 'El Buen Gusto', 'tier': 2, 'multiplier': 1.3, 'icon': '🏪'},
+    {'name': 'Claudia Montanaro', 'tier': 2, 'multiplier': 1.5, 'icon': '💁‍♀️️'},
+    {'name': 'Carrefour', 'tier': 2, 'multiplier': 2.0, 'icon': '🥖'},
+    {'name': 'Spotify', 'tier': 3, 'multiplier': 2.5, 'icon': '🎵'},
+    {'name': 'Presidente Chiki Oso', 'tier': 3, 'multiplier': 3.0, 'icon': '⚽'},
   ];
 
-  static const List<String> OBJECTIVES = [
-    "Ganar los próximos 2 partidos de Liga.",
-    "Marcar 5 goles en total en los próximos 3 partidos.",
-    "Mantener la valla invicta en 2 de los próximos 4 partidos.",
-    "Alinear a 3 jugadores de menos de 75 de media en el próximo partido y ganar.",
-    "No recibir tarjetas rojas en los próximos 5 partidos.",
-    "Ganar el próximo partido por una diferencia de 3 goles o más.",
+  // CAMBIO 1: Los objetivos ahora tienen un precio base según su dificultad.
+  static const List<Map<String, dynamic>> OBJECTIVES = [
+    {
+      "description": "Ganar los próximos 2 partidos de Liga.",
+      "basePayment": 80000000 // Difícil, paga bien base
+    },
+    {
+      "description": "Marcar 5 goles en total en los próximos 3 partidos.",
+      "basePayment": 10000000 // Medio
+    },
+    {
+      "description": "Mantener la valla invicta en 2 de los próximos 4 partidos.",
+      "basePayment": 18000000 // Difícil para equipos chicos
+    },
+    {
+      "description": "Alinear a los 3 jugadores de menos media en el próximo partido contra un equipo +1000 ELO y ganar.",
+      "basePayment": 25000000 // Muy Arriesgado, paga mucho
+    },
+    {
+      "description": "No recibir tarjetas rojas en los próximos 5 partidos.",
+      "basePayment": 10000000 // Fácil, paga poco
+    },
+    {
+      "description": "Ganar el próximo partido por una diferencia de 3 goles o más.",
+      "basePayment": 25000000 // Muy Difícil
+    },
+    {
+      "description": "Jugar el proximo partido con un 5-4-1 y ganar",
+      "basePayment": 30000000 // Muy Difícil
+    },
+    {
+      "description": "Obetene una posesion superior al 60% en tu proximo partido",
+      "basePayment": 8000000 // Muy Difícil
+    },
+    {
+      "description": "Obetene una posesion menor al 40% en tu proximo partido",
+      "basePayment": 8000000 // Muy Difícil
+    },
+    {
+      "description": "Logra 10 tiros al arco (no afuera) en el proximo partido",
+      "basePayment": 10000000 // Muy Difícil
+    },
+    {
+      "description": "Alcanza 150 pases en el proximo partido",
+      "basePayment": 12000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga 3 goles en un solo partido",
+      "basePayment": 20000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga 4 goles en un solo partido",
+      "basePayment": 35000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga 5 goles en un solo partido",
+      "basePayment": 50000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga 3 goles de cabeza en 2 partidos",
+      "basePayment": 15000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga un gol de chinela (bien hecho, no volea ni tijera)",
+      "basePayment": 20000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga un gol de tiro libre cercano",
+      "basePayment": 10000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga un gol de tiro libre lejano",
+      "basePayment": 15000000 // Muy Difícil
+    },
+    {
+      "description": "Logra que un jugador haga un gol olimpico",
+      "basePayment": 70000000 // Muy Difícil
+    },
   ];
 
   // 1. GENERAR OFERTA (Lógica Modificada)
   Future<void> tryGenerateSponsorshipOffer(String seasonId, String userId, String teamName) async {
-    // A. PASO 1: Verificar si ya tiene un contrato ACEPTADO (Activo o en revisión)
-    // Si ya aceptó uno, NO le deben llegar más ofertas hasta que lo termine o abandone.
+    // A. PASO 1: Verificar si ya tiene un contrato ACEPTADO
     var activeContracts = await _db.collection('seasons').doc(seasonId)
         .collection('participants').doc(userId)
         .collection('sponsorships')
@@ -34,20 +105,14 @@ class SponsorshipService {
         .get();
 
     if (activeContracts.docs.isNotEmpty) {
-      // Ya tiene trabajo, no molestamos.
       return;
     }
 
-    // B. PASO 2: Tirar los dados de la suerte
+    // B. PASO 2: Probabilidad
     final random = Random();
-    // 30% de probabilidad de recibir oferta al ganar
     if (random.nextDouble() > 0.30) return;
 
-    // --- ¡NUEVA OFERTA EN CAMINO! ---
-
-    // C. PASO 3: Limpiar ofertas viejas NO aceptadas
-    // Si llegamos aquí, es porque salió una nueva. Si el usuario tenía una oferta "vísta" pendiente ('OFFER'),
-    // la borramos para reemplazarla por esta nueva (el tren pasa una sola vez).
+    // C. PASO 3: Limpiar ofertas viejas
     var pendingOffers = await _db.collection('seasons').doc(seasonId)
         .collection('participants').doc(userId)
         .collection('sponsorships')
@@ -58,15 +123,26 @@ class SponsorshipService {
       await doc.reference.delete();
     }
 
-    // D. PASO 4: Crear la nueva oferta
+    // D. PASO 4: Crear la nueva oferta con Lógica Dinámica
+
+    // Seleccionamos Marca y Objetivo
     var brand = BRANDS[random.nextInt(BRANDS.length)];
-    String objective = OBJECTIVES[random.nextInt(OBJECTIVES.length)];
+    var objectiveData = OBJECTIVES[random.nextInt(OBJECTIVES.length)];
 
-    int baseReward = 1000000; // 1M base
-    double variation = 0.8 + random.nextDouble() * 0.4; // 0.8 a 1.2
-    int finalReward = (baseReward * (brand['multiplier'] as double) * variation).round();
+    // CAMBIO 2: Cálculo del dinero
+    // Obtenemos el pago base del objetivo específico
+    int objectiveBaseReward = objectiveData['basePayment'] as int;
 
-    // Redondear a decenas de miles para que se vea bonito
+    // Obtenemos el multiplicador de la marca (Ej: Nike paga x3.8, Local Store x1.0)
+    double brandMultiplier = brand['multiplier'] as double;
+
+    // Factor de negociación aleatoria (entre 0.9 y 1.1 para pequeña variación)
+    double randomVariation = 0.9 + random.nextDouble() * 0.2;
+
+    // FÓRMULA FINAL: (Base del Objetivo * Multiplicador Marca * Variación)
+    int finalReward = (objectiveBaseReward * brandMultiplier * randomVariation).round();
+
+    // Redondear a decenas de miles para que se vea "limpio" (ej: 1.240.000)
     finalReward = (finalReward ~/ 10000) * 10000;
 
     await _db.collection('seasons').doc(seasonId)
@@ -75,13 +151,13 @@ class SponsorshipService {
       'brandName': brand['name'],
       'brandIcon': brand['icon'],
       'tier': brand['tier'],
-      'description': objective,
+      'description': objectiveData['description'], // Tomamos la descripción del mapa
       'reward': finalReward,
-      'status': 'OFFER', // Llega como oferta
+      'status': 'OFFER',
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    print("✅ Nueva oferta generada para $teamName: ${brand['name']} (Reemplazando anteriores si había)");
+    print("✅ Nueva oferta generada para $teamName: ${brand['name']} - \$${finalReward}");
   }
 
   // 2. ACEPTAR OFERTA

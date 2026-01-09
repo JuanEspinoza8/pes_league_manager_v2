@@ -20,7 +20,6 @@ class SquadBuilderScreen extends StatefulWidget {
 }
 
 class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
-  // --- LÓGICA INTACTA ---
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
   final Map<String, Map<String, Offset>> formations = {
@@ -198,7 +197,7 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                         keyboardType: TextInputType.number,
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                         decoration: InputDecoration(
-                            labelText: "Oferta en Dinero",
+                            labelText: "Oferta en Dinero (Opcional)",
                             prefixText: "\$ ",
                             filled: true,
                             fillColor: const Color(0xFF0F172A),
@@ -208,7 +207,7 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text("O intercambiar por:", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+                      const Text("JUGADOR DE CAMBIO (OBLIGATORIO)", style: TextStyle(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 10),
 
                       if (loadingMyPlayers)
@@ -216,7 +215,7 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                       else
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(12), border: Border.all(color: selectedSwapPlayer == null ? Colors.redAccent.withOpacity(0.5) : Colors.transparent)),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
@@ -253,7 +252,10 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                   ElevatedButton(
                       onPressed: () async {
                         int offerAmount = int.tryParse(moneyController.text) ?? 0;
-                        if (offerAmount == 0 && selectedSwapPlayer == null) {
+
+                        // VALIDACIÓN ESTRICTA: Intercambio Obligatorio
+                        if (selectedSwapPlayer == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ Es obligatorio incluir un jugador en la oferta."), backgroundColor: Colors.red));
                           return;
                         }
 
@@ -305,7 +307,6 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
     allDocs.sort((a,b) => (b['rating']??0).compareTo(a['rating']??0));
     return allDocs;
   }
-  // --- FIN LÓGICA ---
 
   @override
   Widget build(BuildContext context) {
@@ -414,7 +415,6 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
                     child: Stack(
                       children: slots.keys.map((posKey) {
                         Offset relativePos = slots[posKey]!;
-                        // Ajustamos ligeramente las posiciones para que centren bien en el contenedor
                         return Positioned(
                           left: relativePos.dx * constraints.maxWidth - 27.5,
                           top: relativePos.dy * constraints.maxHeight - 27.5,
@@ -539,7 +539,6 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
               ),
             )
           else
-          // Etiqueta de Posición vacía
             Container(
               margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -553,58 +552,79 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
 
   void _showPlayerSelector(String posKey) {
     showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF0F172A),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      isScrollControlled: true, // Para mejor altura
-      builder: (context) {
-        var available = myFullRoster.where((doc) => !lineup.containsValue(doc.id)).toList();
-        return DraggableScrollableSheet(
-            initialChildSize: 0.5,
-            minChildSize: 0.3,
-            maxChildSize: 0.8,
-            expand: false,
-            builder: (context, scrollController) {
-              return Column(
-                children: [
-                  Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
-                  const Padding(padding: EdgeInsets.all(20), child: Text("SELECCIONAR JUGADOR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 2))),
-                  ListTile(
-                    leading: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 16)),
-                    title: const Text("QUITAR JUGADOR", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                    onTap: () {
-                      setState(() => lineup[posKey] = null);
-                      Navigator.pop(context);
+        context: context,
+        backgroundColor: const Color(0xFF0F172A),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (context) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            height: 500,
+            child: Column(
+              children: [
+                Text("SELECCIONA $posKey", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 1)),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: myFullRoster.length + 1,
+                    separatorBuilder: (c, i) => Divider(color: Colors.white.withOpacity(0.05)),
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return ListTile(
+                          leading: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                          title: const Text("Dejar vacío", style: TextStyle(color: Colors.redAccent)),
+                          onTap: () {
+                            setState(() => lineup.remove(posKey));
+                            Navigator.pop(context);
+                          },
+                        );
+                      }
+                      var p = myFullRoster[index - 1];
+                      var data = p.data() as Map<String, dynamic>;
+                      bool isSelected = lineup.containsValue(p.id);
+
+                      return ListTile(
+                        enabled: !isSelected || lineup[posKey] == p.id,
+                        leading: _buildPlayerCircle(data, 40),
+                        title: Text(data['name'], style: TextStyle(color: isSelected ? Colors.white30 : Colors.white, fontWeight: FontWeight.bold)),
+                        subtitle: Text(data['position'], style: const TextStyle(color: Colors.white54)),
+                        trailing: Text("${data['rating']}", style: const TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.w900, fontSize: 16)),
+                        onTap: () {
+                          if (!isSelected) {
+                            setState(() => lineup[posKey] = p.id);
+                            Navigator.pop(context);
+                          }
+                        },
+                      );
                     },
                   ),
-                  const Divider(color: Colors.white10),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      itemCount: available.length,
-                      itemBuilder: (context, index) {
-                        var p = available[index].data() as Map<String, dynamic>;
-                        return Container(
-                          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white12))),
-                          child: ListTile(
-                            leading: _buildPlayerCircle(p, 45),
-                            title: Text(p['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            subtitle: Text("${p['position']} • Media: ${p['rating']}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                            trailing: const Icon(Icons.add_circle_outline, color: Color(0xFFD4AF37)),
-                            onTap: () {
-                              setState(() => lineup[posKey] = available[index].id);
-                              Navigator.pop(context);
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              );
-            }
-        );
-      },
+                )
+              ],
+            ),
+          );
+        }
+    );
+  }
+
+  // --- HELPERS VISUALES ---
+  BoxDecoration _getSlotDecoration(Map<String, dynamic>? data) {
+    if (data == null) {
+      return BoxDecoration(
+        color: Colors.black45,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white12, width: 2),
+      );
+    }
+    int rating = data['rating'] ?? 0;
+    Color borderColor = Colors.grey;
+    if (rating >= 90) borderColor = const Color(0xFFD4AF37); // Gold
+    else if (rating >= 85) borderColor = Colors.purpleAccent;
+    else if (rating >= 80) borderColor = Colors.blueAccent;
+
+    return BoxDecoration(
+        color: const Color(0xFF1E293B),
+        shape: BoxShape.circle,
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: [BoxShadow(color: borderColor.withOpacity(0.4), blurRadius: 10)]
     );
   }
 
@@ -612,65 +632,16 @@ class _SquadBuilderScreenState extends State<SquadBuilderScreen> {
     return Container(
       width: size, height: size,
       decoration: _getSlotDecoration(data),
-      child: Center(child: Text(data['photoUrl'] == "" ? "${data['rating']}" : "", style: TextStyle(color: _getTextColorForRating(data), fontWeight: FontWeight.w900, fontSize: size * 0.4))),
+      child: (data['photoUrl'] != null && data['photoUrl'] != "")
+          ? ClipOval(child: Image.network(data['photoUrl'], fit: BoxFit.cover))
+          : Center(child: Text("${data['rating']}", style: TextStyle(color: _getTextColorForRating(data), fontWeight: FontWeight.w900, fontSize: size * 0.35))),
     );
   }
 
-  Color _getTextColorForRating(Map<String, dynamic>? player) {
-    if (player == null) return Colors.white;
-    int rating = player['rating'] ?? 75;
-    if (rating >= 85) return Colors.black; // Gold & Black balls text should be black or dark
+  Color _getTextColorForRating(Map<String, dynamic>? data) {
+    if (data == null) return Colors.white;
+    int rating = data['rating'] ?? 0;
+    if (rating >= 90) return const Color(0xFFD4AF37);
     return Colors.white;
-  }
-
-  BoxDecoration _getSlotDecoration(Map<String, dynamic>? player) {
-    if (player == null) return BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle, border: Border.all(color: Colors.white12, width: 2, style: BorderStyle.solid));
-
-    int rating = player['rating'] ?? 75;
-    String tier = player['tier'] ?? '';
-
-    // LEYENDA (Gradiente Místico)
-    if (tier == 'LEYENDA') {
-      return BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(colors: [Color(0xFFB8860B), Color(0xFFFFD700), Color(0xFFDAA520)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.6), blurRadius: 10)]
-      );
-    }
-    // PRIME (Negro y Neón)
-    if (tier == 'PRIME') {
-      return BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.black,
-          border: Border.all(color: Colors.cyanAccent, width: 2),
-          boxShadow: [BoxShadow(color: Colors.cyanAccent.withOpacity(0.5), blurRadius: 8)]
-      );
-    }
-
-    // Colores base estilo PES clásico
-    Color bgColor;
-    Color borderColor;
-
-    if (rating >= 90) { // Black Ball
-      bgColor = const Color(0xFF101010);
-      borderColor = Colors.grey;
-    } else if (rating >= 85) { // Gold Ball
-      bgColor = const Color(0xFFD4AF37);
-      borderColor = const Color(0xFFF7E7CE);
-    } else if (rating >= 80) { // Silver Ball
-      bgColor = const Color(0xFFC0C0C0);
-      borderColor = Colors.white70;
-    } else { // Bronze Ball
-      bgColor = const Color(0xFFCD7F32);
-      borderColor = const Color(0xFF8B4513);
-    }
-
-    return BoxDecoration(
-        shape: BoxShape.circle,
-        color: bgColor,
-        border: Border.all(color: borderColor, width: 2),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 4, offset: const Offset(0,2))]
-    );
   }
 }

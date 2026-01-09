@@ -1,6 +1,8 @@
+import 'dart:typed_data'; // Necesario para manejar la imagen en memoria
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart'; // Necesario para seleccionar foto
 import 'tabs/matches_tab.dart';
 import 'tabs/standings_tab.dart';
 import 'tabs/stats_tab.dart';
@@ -17,8 +19,8 @@ import '../services/season_generator_service.dart';
 import '../services/champions_progression_service.dart';
 import '../services/standings_service.dart';
 import '../services/stats_service.dart';
+import '../services/news_service.dart'; // Para subir a Cloudinary
 import '../utils/debug_tools.dart';
-import 'custom_news_screen.dart';
 
 class LeagueDashboardScreen extends StatefulWidget {
   final String seasonId;
@@ -99,14 +101,20 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
                   var data = docs[i].data() as Map<String, dynamic>;
                   String teamName = data['teamName'];
                   String desc = data['managerDescription'] ?? "No definida";
+                  // Obtenemos la URL actual si existe
+                  String? currentPhotoUrl = data['managerPhotoUrl'];
 
                   return ListTile(
+                    leading: currentPhotoUrl != null
+                        ? CircleAvatar(backgroundImage: NetworkImage(currentPhotoUrl))
+                        : const Icon(Icons.person, color: Colors.white54),
                     title: Text(teamName, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     subtitle: Text(desc, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54)),
                     trailing: const Icon(Icons.edit, color: Colors.blue),
                     onTap: () {
                       Navigator.pop(context);
-                      _showEditManagerDescriptionDialog(docs[i].id, teamName, desc == "No definida" ? "" : desc);
+                      // Pasamos la URL actual al diálogo
+                      _showEditManagerDescriptionDialog(docs[i].id, teamName, desc == "No definida" ? "" : desc, currentPhotoUrl);
                     },
                   );
                 },
@@ -114,57 +122,136 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
             },
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar"))],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar", style: TextStyle(color: Colors.white54)))],
       ),
     );
   }
 
-  void _showEditManagerDescriptionDialog(String userId, String teamName, String currentDesc) {
+  // --- DIÁLOGO MODIFICADO (Carga de Imágenes) ---
+  void _showEditManagerDescriptionDialog(String userId, String teamName, String currentDesc, String? currentPhotoUrl) {
     TextEditingController _ctrl = TextEditingController(text: currentDesc);
+    Uint8List? _selectedImageBytes; // Usamos bytes en lugar de File para evitar errores de Namespace
+    bool _isUploading = false;
+    final ImagePicker _picker = ImagePicker();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text("DT de $teamName", style: const TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("Describe físicamente a tu amigo para que la IA lo dibuje.", style: TextStyle(fontSize: 12, color: Colors.white54)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _ctrl,
-              maxLines: 3,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                  hintText: "Ej: Rubio, gafas de sol, traje negro...",
-                  hintStyle: TextStyle(color: Colors.white30),
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.black26
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('seasons').doc(widget.seasonId)
-                  .collection('participants').doc(userId)
-                  .update({'managerDescription': _ctrl.text.trim()});
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E293B),
+              title: Text("DT de $teamName", style: const TextStyle(color: Colors.white)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("Sube una foto real o describe al DT.", style: TextStyle(fontSize: 12, color: Colors.white54)),
+                    const SizedBox(height: 15),
 
-              if(mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Apariencia de $teamName guardada")));
-                _showManagerAppearanceList();
-              }
-            },
-            child: const Text("GUARDAR"),
-          )
-        ],
-      ),
+                    // --- SELECTOR DE FOTO ---
+                    GestureDetector(
+                      onTap: _isUploading ? null : () async {
+                        try {
+                          final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+                          if (image != null) {
+                            final bytes = await image.readAsBytes();
+                            setStateDialog(() => _selectedImageBytes = bytes);
+                          }
+                        } catch (e) {
+                          debugPrint("Error picking image: $e");
+                        }
+                      },
+                      child: Container(
+                        height: 120,
+                        width: 120,
+                        decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(60), // Circular
+                            border: Border.all(color: Colors.white24),
+                            image: _selectedImageBytes != null
+                                ? DecorationImage(image: MemoryImage(_selectedImageBytes!), fit: BoxFit.cover)
+                                : (currentPhotoUrl != null
+                                ? DecorationImage(image: NetworkImage(currentPhotoUrl), fit: BoxFit.cover)
+                                : null)
+                        ),
+                        child: (_selectedImageBytes == null && currentPhotoUrl == null)
+                            ? const Icon(Icons.add_a_photo, color: Colors.white54, size: 30)
+                            : null,
+                      ),
+                    ),
+                    if (_selectedImageBytes != null)
+                      const Padding(padding: EdgeInsets.only(top: 8), child: Text("Nueva imagen seleccionada", style: TextStyle(color: Colors.greenAccent, fontSize: 10))),
+
+                    const SizedBox(height: 20),
+
+                    // --- CAMPO DE TEXTO ---
+                    TextField(
+                      controller: _ctrl,
+                      maxLines: 3,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                          hintText: "Ej: Rubio, gafas de sol, traje negro...",
+                          hintStyle: TextStyle(color: Colors.white30),
+                          labelText: "Descripción Física",
+                          labelStyle: TextStyle(color: Colors.white54),
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Colors.black26
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                if (!_isUploading)
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar", style: TextStyle(color: Colors.white54))),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
+                  onPressed: _isUploading ? null : () async {
+                    setStateDialog(() => _isUploading = true);
+
+                    try {
+                      String? finalUrl = currentPhotoUrl;
+
+                      // 1. Subir a Cloudinary si hay imagen nueva
+                      if (_selectedImageBytes != null) {
+                        // Usamos la función pública que añadimos a NewsService
+                        finalUrl = await NewsService().uploadToCloudinary(_selectedImageBytes!);
+                      }
+
+                      // 2. Guardar en Firestore
+                      Map<String, dynamic> updates = {
+                        'managerDescription': _ctrl.text.trim(),
+                      };
+                      if (finalUrl != null) updates['managerPhotoUrl'] = finalUrl;
+
+                      await FirebaseFirestore.instance
+                          .collection('seasons').doc(widget.seasonId)
+                          .collection('participants').doc(userId)
+                          .update(updates);
+
+                      if(mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Apariencia de $teamName guardada")));
+                        _showManagerAppearanceList(); // Refrescar lista
+                      }
+                    } catch (e) {
+                      setStateDialog(() => _isUploading = false);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+                    }
+                  },
+                  child: _isUploading
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                      : const Text("GUARDAR"),
+                )
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -404,9 +491,6 @@ class _LeagueDashboardScreenState extends State<LeagueDashboardScreen> {
   }
 
   void _showRigPackDialog() {
-    // (Similar actualización de colores al diálogo anterior si se desea, omitido por brevedad para enfocar en el Dashboard principal)
-    // ... Lógica Original ...
-    // Solo actualizo el background del AlertDialog a 0xFF1E293B y textos a blanco.
     String? selectedUserId;
     String? selectedPlayerId;
     String selectedPlayerName = "Ninguno seleccionado";

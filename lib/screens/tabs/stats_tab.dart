@@ -109,10 +109,10 @@ class _TeamsStatsView extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildStatBox("MURO DE HIERRO", "Vallas Invictas", docs, 'cleanSheets', true, Icons.security, Colors.blueAccent),
-            _buildStatBox("MÁQUINA OFENSIVA", "Promedio Gol/P", docs, 'avgGoals', false, Icons.sports_soccer, Colors.greenAccent),
-            _buildStatBox("POSESIÓN TOTAL", "Promedio %", docs, 'avgPossession', false, Icons.pie_chart, Colors.purpleAccent, suffix: "%"),
-            _buildStatBox("PRECISIÓN SUIZA", "Pases Completados", docs, 'avgPassesCompleted', false, Icons.check_circle_outline, Colors.tealAccent),
+            _buildStatBox("MEJOR DEFENSA", "Vallas Invictas", docs, 'cleanSheets', true, Icons.security, Colors.blueAccent),
+            _buildStatBox("MAQUINA DE GOLES", "Promedio Gol/P", docs, 'avgGoals', false, Icons.sports_soccer, Colors.greenAccent),
+            _buildStatBox("REYES DE LA POSESION", "Promedio %", docs, 'avgPossession', false, Icons.pie_chart, Colors.purpleAccent, suffix: "%"),
+            _buildStatBox("TIKI-TAKA", "Pases Completados", docs, 'avgPassesCompleted', false, Icons.check_circle_outline, Colors.tealAccent),
           ],
         );
       },

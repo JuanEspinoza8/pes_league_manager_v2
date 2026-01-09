@@ -14,6 +14,7 @@ import '../services/discipline_service.dart';
 import '../services/news_service.dart';
 import '../services/supercopa_progression_service.dart';
 import '../services/sponsorship_service.dart';
+import '../services/ranking_service.dart';
 
 class MatchResultScreen extends StatefulWidget {
   final String seasonId;
@@ -258,17 +259,78 @@ class _MatchResultScreenState extends State<MatchResultScreen> {
   }
 
   Future<void> _processAdminTasks(int hGoals, int aGoals, bool definedByPenalties, String? penaltyScoreStr) async {
-    // 1. PREMIOS
-    int winReward = 15000000; int drawReward = 7500000;
-    int homePrize = (hGoals > aGoals) ? winReward : (aGoals > hGoals ? 0 : drawReward);
-    int awayPrize = (aGoals > hGoals) ? winReward : (hGoals > aGoals ? 0 : drawReward);
+    // --- 1. RANKING Y PREMIOS DINÁMICOS (ELO) ---
 
-    if (homePrize > 0 && !widget.matchData['homeUser'].startsWith('TBD')) {
-      await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['homeUser']).update({'budget': FieldValue.increment(homePrize)});
+    // Obtener documentos de los equipos para leer su ranking actual
+    var homeDoc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['homeUser']).get();
+    var awayDoc = await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['awayUser']).get();
+
+    // Si no tienen ranking (primera vez), asumimos 1000 puntos
+    int homeRating = homeDoc.data()?['rankingPoints'] ?? 1000;
+    int awayRating = awayDoc.data()?['rankingPoints'] ?? 1000;
+
+    // Determinar resultado (1.0 = Gana, 0.5 = Empate, 0.0 = Pierde)
+    double homeResult, awayResult;
+    bool homeWon = false, awayWon = false, isDraw = false;
+
+    if (hGoals > aGoals) {
+      homeResult = 1.0; awayResult = 0.0; homeWon = true;
+    } else if (aGoals > hGoals) {
+      homeResult = 0.0; awayResult = 1.0; awayWon = true;
+    } else {
+      // Si hay penales, el ganador se lleva un poco más de mérito (0.75 vs 0.25 o mantener empate 0.5)
+      // Para ranking FIFA puro, empate sigue siendo empate (0.5) en 120mins, pero aquí premiamos al ganador de penales
+      if (definedByPenalties && penaltyScoreStr != null) {
+        List<String> parts = penaltyScoreStr.split('-');
+        int hPen = int.parse(parts[0]);
+        int aPen = int.parse(parts[1]);
+        if (hPen > aPen) { homeResult = 0.75; awayResult = 0.25; homeWon = true; } // Victoria por penales vale menos que normal
+        else { homeResult = 0.25; awayResult = 0.75; awayWon = true; }
+      } else {
+        homeResult = 0.5; awayResult = 0.5; isDraw = true;
+      }
     }
-    if (awayPrize > 0 && !widget.matchData['awayUser'].startsWith('TBD')) {
-      await FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('participants').doc(widget.matchData['awayUser']).update({'budget': FieldValue.increment(awayPrize)});
+
+    // Calcular nuevos rankings
+    var newHomeStats = RankingService.calculateNewRanking(homeRating, awayRating, homeResult);
+    var newAwayStats = RankingService.calculateNewRanking(awayRating, homeRating, awayResult);
+
+    // Calcular dinero ganado
+    int homeMoney = RankingService.calculateBudgetReward(homeWon, isDraw, newHomeStats['change']!);
+    int awayMoney = RankingService.calculateBudgetReward(awayWon, isDraw, newAwayStats['change']!);
+
+    // ACTUALIZAR BASE DE DATOS (Ranking + Dinero)
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+
+    // Update Local
+    if (!widget.matchData['homeUser'].startsWith('TBD')) {
+      batch.update(homeDoc.reference, {
+        'rankingPoints': newHomeStats['newRating'],
+        'budget': FieldValue.increment(homeMoney)
+      });
     }
+
+    // Update Visita
+    if (!widget.matchData['awayUser'].startsWith('TBD')) {
+      batch.update(awayDoc.reference, {
+        'rankingPoints': newAwayStats['newRating'],
+        'budget': FieldValue.increment(awayMoney)
+      });
+    }
+
+    // Guardar historial del cambio de ranking en el partido (opcional, para mostrarlo luego)
+    batch.update(FirebaseFirestore.instance.collection('seasons').doc(widget.seasonId).collection('matches').doc(widget.matchId), {
+      'rankingChange': {
+        'home': newHomeStats['change'],
+        'away': newAwayStats['change']
+      },
+      'rewards': {
+        'home': homeMoney,
+        'away': awayMoney
+      }
+    });
+
+    await batch.commit();
 
     await StatsService().recalculateTeamStats(widget.seasonId);
 
